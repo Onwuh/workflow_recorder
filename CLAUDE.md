@@ -20,19 +20,30 @@ Sprache: Oberfläche, Kommentare und Commit-Nachrichten auf Deutsch.
 - Commits laufen unter der Identität dieser Umgebung („Claude“) und werden signiert. Nicht ändern.
 - Niemals eine andere Autor-Identität setzen, insbesondere kein Odoo-Konto und keine private Mailadresse.
 
-## Architektur (geplant)
+## Architektur
+
+Kein Build-Schritt, klassische Skripte ohne Module (laufen so in Chrome-Service-Worker, Firefox-Hintergrundseite und Erweiterungsseiten).
 
 ```
 manifest.json
 src/
   db.js             IndexedDB: Stores "guides" und "steps" (Index guideId), Screenshot als Blob im Schritt
-  background.js     Aufnahmezustand, Screenshots, Speichern
+  settings.js       Einstellungen in storage.local mit Prüfung (autoRedact, keySteps, fields, footer)
+  background.js     Aufnahmezustand, Screenshots, Speichern, Nachrichten-Prüfung
   content.js        Klick-Erkennung, Schritttext, Auto-Schwärzung
   ui.css            gemeinsame Tokens (siehe docs/design/README.md)
+  lib/util.js       DOM-Helfer (el, icon), Datum, Download, Toast
+  lib/render.js     Canvas: Schwärzen/Zuschneiden fest ins Bild, Exportbild mit Marker und Pfeilen
+  lib/zip.js        ZIP schreiben/lesen mit Schutzgrenzen
+  lib/project.js    Format und Schema-Prüfung der Projektsicherung
   popup/            Popup bereit / Aufnahme
-  editor/           Übersicht und Editor (editor.html?guide=<id>)
-  export/           HTML, PDF, Odoo-Zwischenablage, Markdown-ZIP
+  editor/           Übersicht und Editor (editor.html?guide=<id>), Export-Dialog
+  export/           exporters.js (HTML, Odoo, Markdown, Sicherung, Import), guide.css, preview.html (Vorschau/PDF)
+  options/          Einstellungsseite
+tests/              Unit-Tests (node --test) und e2e/ (Playwright, Chromium)
 ```
+
+Schritte haben `type: 'step' | 'section'`. Klickmarker und Pfeile (`annotations`, Bildpixel) bleiben Vektordaten und werden erst beim Export eingezeichnet. Schwärzen und Zuschneiden ersetzen das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
 
 ## Umsetzungshinweise
 
@@ -74,10 +85,13 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Zwischenablage mit `ClipboardItem` (`text/html` und `text/plain`). Fallback: Inhalt markieren und `document.execCommand('copy')`.
 - Testseite: `docs/tests/odoo-paste-test.html` (Seiteninhalt eines Claude-Artifacts, ohne eigenes `<html>`-Gerüst).
 
-## Nächste Schritte
+## Stand
 
-1. Grundgerüst: Manifest, IndexedDB, Aufnahme mit Screenshots und Auto-Schwärzung, Popup nach `docs/design/screens/Main.dc.html` und `Recording.dc.html`.
-2. Editor nach `Editor.dc.html`: Schritte auswählen, Text und Hinweis bearbeiten, löschen.
-3. Manuelles Schwärzen und Zuschneiden, fest ins Bild gerechnet.
-4. Export nach `Export.dc.html` und `Guide.dc.html`.
-5. Projektsicherung als ZIP.
+Umgesetzt: Aufnahme mit Auto-Schwärzung, Popup, Editor mit Schwärzen/Zuschneiden/Klickpunkt/Pfeilen, Abschnitte, Export (HTML, PDF über Druckansicht, Odoo-Zwischenablage, Markdown-ZIP), Projektsicherung und Import, Einstellungen.
+
+Prüfen vor jedem Commit: `npm test`, `npm run lint`, `npm run e2e`.
+
+Offen:
+1. Test in echtem Firefox (bisher nur `web-ext lint`, E2E läuft in Chromium).
+2. Test an einer echten Odoo-Instanz (Selektoren für Breadcrumb, Many2one, Listen in Odoo 17/18).
+3. Schwärzung in iframes.

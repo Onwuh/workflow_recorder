@@ -1,0 +1,260 @@
+/* End-to-End-Test: lädt die Erweiterung in Chromium, nimmt Klicks auf einer Odoo-ähnlichen Testseite auf
+   und prüft Schritttexte, Schwärzung, Editor und Exporte. Aufruf: npm run e2e */
+'use strict';
+const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const os = require('os');
+const { chromium } = require('playwright');
+
+const ROOT = path.resolve(__dirname, '../..');
+const OUT = process.env.E2E_OUT || path.join(os.tmpdir(), 'wfr-e2e');
+fs.mkdirSync(OUT, { recursive: true });
+
+const fails = [];
+function check(cond, msg) {
+  console.log((cond ? 'ok   ' : 'FAIL ') + msg);
+  if (!cond) fails.push(msg);
+}
+
+(async () => {
+  const server = http.createServer((req, res) => {
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(fs.readFileSync(path.join(__dirname, 'fixture.html')));
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'wfr-prof-')), {
+    channel: 'chromium',
+    headless: true,
+    viewport: { width: 1280, height: 800 },
+    args: [`--disable-extensions-except=${ROOT}`, `--load-extension=${ROOT}`]
+  });
+  const errors = [];
+  ctx.on('weberror', (e) => errors.push(String(e.error())));
+  let [sw] = ctx.serviceWorkers();
+  if (!sw) sw = await ctx.waitForEvent('serviceworker');
+  const extId = sw.url().split('/')[2];
+  const ext = (p) => `chrome-extension://${extId}/${p}`;
+
+  // Erweiterungsseite (für Nachrichten und DB-Zugriff), danach die Testseite als aktiver Tab.
+  const helper = await ctx.newPage();
+  helper.on('console', (m) => { if (m.type() === 'error') errors.push('helper: ' + m.text()); });
+  await helper.goto(ext('src/popup/popup.html'));
+  const page = await ctx.newPage();
+  await page.goto(base);
+  await page.bringToFront();
+
+  const tabId = await helper.evaluate(async (u) => (await chrome.tabs.query({ url: u + '*' }))[0].id, base);
+  const start = await helper.evaluate((id) => chrome.runtime.sendMessage({ type: 'start', tabId: id }), tabId);
+  check(start && start.ok, 'Aufnahme startet: ' + JSON.stringify(start && (start.error || 'ok')));
+  const guideId = start.rec.guideId;
+
+  const clicks = ['#confirm', '#partner_id_0', '#qty_0', '#bc', '#rowcell', '#tab', '#iconbtn', '#menu-orders'];
+  for (const sel of clicks) {
+    await page.click(sel);
+    await page.waitForTimeout(700);
+  }
+  await page.waitForTimeout(800);
+
+  const steps = await helper.evaluate((g) => DB.getSteps(g).then((s) => s.map((x) => ({ text: x.text, unredacted: x.unredacted, imgW: x.imgW, x: x.x, y: x.y, vw: x.vw }))), guideId);
+  const texts = steps.map((s) => s.text);
+  console.log(texts);
+  check(steps.length === clicks.length, `alle ${clicks.length} Klicks aufgenommen (${steps.length})`);
+  check(texts[0] === 'Klicke auf „Bestätigen“', 'Button-Text');
+  check(texts[1] === 'Wähle bei „Kunde“ einen Eintrag aus', 'Many2one mit Label ohne Tooltip-?');
+  check(texts[2] === 'Gib bei „Menge“ einen Wert ein', 'Eingabefeld');
+  check(texts[3] === 'Gehe über die Navigationsleiste zurück', 'Breadcrumb generisch');
+  check(texts[4] === 'Öffne einen Eintrag aus der Liste', 'Listenzeile generisch');
+  check(texts[5] === 'Öffne den Reiter „Auftragszeilen“', 'Reiter');
+  check(texts[6] === 'Klicke auf „Aktion“', 'aria-label');
+  check(texts[7] === 'Öffne das Menü „Aufträge“', 'Menü');
+  check(!texts.join(' ').includes('Beispielkunde') && !texts.join(' ').includes('GEHEIM'), 'keine Daten im Schritttext');
+  check(steps[0].unredacted === 2, `ungeschwärzte Felder gezählt (${steps[0].unredacted}, erwartet 2: Menge, Referenz)`);
+
+  // Schwärzung im Bild: Pixel mitten im Kundenfeld und im E-Mail-Feld müssen #1B1D1F sein.
+  const rects = await page.evaluate(() => ['#partner_id_0', '#email_0', '#qty_0', '#rowcell'].map((s) => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }));
+  const px = await helper.evaluate(async ({ g, pts }) => {
+    const s = (await DB.getSteps(g))[0];
+    const bmp = await createImageBitmap(s.image);
+    const c = new OffscreenCanvas(bmp.width, bmp.height);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(bmp, 0, 0);
+    const k = bmp.width / s.vw;
+    return pts.map((p) => Array.from(ctx.getImageData(Math.round(p.x * k), Math.round(p.y * k), 1, 1).data));
+  }, { g: guideId, pts: rects });
+  const dark = (p) => p[0] === 0x1B && p[1] === 0x1D && p[2] === 0x1F;
+  check(dark(px[0]), 'Kundenfeld geschwärzt ' + px[0]);
+  check(dark(px[1]), 'E-Mail-Feld geschwärzt ' + px[1]);
+  check(!dark(px[2]), 'Mengenfeld nicht geschwärzt ' + px[2]);
+  check(dark(px[3]), 'Listenzelle partner_id geschwärzt ' + px[3]);
+  const overlayLeft = await page.evaluate(() => document.querySelectorAll('wfr-redaction').length);
+  check(overlayLeft === 0, 'Overlay nach Screenshot entfernt');
+
+  // Synthetische Ereignisse der Seite (isTrusted = false) dürfen keine Schritte erzeugen.
+  await page.evaluate(() => {
+    const b = document.querySelector('#confirm');
+    b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, isPrimary: true }));
+    b.click();
+  });
+  await page.waitForTimeout(800);
+  const afterFake = await helper.evaluate((g) => DB.countSteps(g), guideId);
+  check(afterFake === clicks.length, 'synthetische Klicks der Seite werden ignoriert');
+
+  // Letzten verwerfen, Pause
+  const disc = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'discard' }));
+  check(disc.rec.count === clicks.length - 1, 'letzter Schritt verworfen');
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'pause' }));
+  await page.click('#confirm');
+  await page.waitForTimeout(800);
+  const afterPause = await helper.evaluate((g) => DB.countSteps(g), guideId);
+  check(afterPause === clicks.length - 1, 'während Pause keine Schritte');
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'resume' }));
+
+  // Popup während der Aufnahme
+  const popup = await ctx.newPage();
+  await popup.setViewportSize({ width: 360, height: 560 });
+  await popup.goto(ext('src/popup/popup.html'));
+  await popup.waitForTimeout(600);
+  await popup.screenshot({ path: path.join(OUT, 'popup-aufnahme.png') });
+  check(await popup.locator('#view-rec').isVisible(), 'Popup zeigt Aufnahme');
+  await popup.close();
+
+  await page.bringToFront();
+  const stop = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop' }));
+  check(stop.ok && stop.guideId === guideId, 'Aufnahme beendet');
+  await page.waitForTimeout(800);
+  const editor = ctx.pages().find((p) => p.url().includes('editor.html?guide='));
+  check(!!editor, 'Editor öffnet sich nach Stopp');
+  await editor.setViewportSize({ width: 1440, height: 980 });
+  await editor.waitForTimeout(800);
+  await editor.screenshot({ path: path.join(OUT, 'editor.png') });
+
+  // Manuelles Schwärzen im Editor
+  await editor.click('[data-tool="redact"]');
+  const box = await editor.locator('#ed-stage').boundingBox();
+  await editor.mouse.move(box.x + 20, box.y + 20);
+  await editor.mouse.down();
+  await editor.mouse.move(box.x + 120, box.y + 60, { steps: 5 });
+  await editor.mouse.up();
+  await editor.waitForTimeout(600);
+  const red = await editor.evaluate(async () => {
+    const s = Editor.state.steps[0];
+    const fresh = await DB.getStep(s.id);
+    const bmp = await createImageBitmap(fresh.image);
+    const c = new OffscreenCanvas(bmp.width, bmp.height);
+    const g = c.getContext('2d');
+    g.drawImage(bmp, 0, 0);
+    const k = bmp.width / document.getElementById('ed-stage').getBoundingClientRect().width;
+    return Array.from(g.getImageData(Math.round(70 * k), Math.round(40 * k), 1, 1).data);
+  });
+  check(dark(red), 'manuelle Schwärzung fest im gespeicherten Bild ' + red);
+
+  // Zuschneiden
+  const before = await editor.evaluate(() => ({ w: Editor.state.steps[0].imgW }));
+  await editor.click('[data-tool="crop"]');
+  await editor.mouse.move(box.x + 10, box.y + 10);
+  await editor.mouse.down();
+  await editor.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
+  await editor.mouse.up();
+  await editor.click('#ed-crop-apply');
+  await editor.waitForTimeout(600);
+  const after = await editor.evaluate(async () => { const s = await DB.getStep(Editor.state.steps[0].id); return { w: s.imgW, bw: (await createImageBitmap(s.image)).width }; });
+  check(after.w < before.w && after.w === after.bw, `Zuschneiden fest im Bild (${before.w} → ${after.w})`);
+
+  // Text bearbeiten, Abschnitt einfügen
+  await editor.fill('#ed-text', 'Klicke auf „Bestätigen“ <script>alert(1)</script>');
+  await editor.fill('#ed-note', 'Hinweis mit <b>HTML</b> & Sonderzeichen');
+  await editor.waitForTimeout(500);
+  await editor.click('#ed-add-section');
+  await editor.waitForFunction(() => document.getElementById('ed-num').textContent === '§');
+  await editor.fill('#ed-text', 'Zweiter Teil');
+  await editor.waitForTimeout(700);
+
+  // Export-Dialog
+  await editor.click('#ed-export');
+  await editor.waitForTimeout(300);
+  await editor.screenshot({ path: path.join(OUT, 'export.png') });
+  check(await editor.locator('#ex-warn').isVisible(), 'Export warnt vor ungeschwärzten Feldern');
+  await editor.locator('.fmt').nth(2).click();
+  await editor.waitForTimeout(1500);
+  const size = await editor.locator('#ex-size').textContent();
+  check(/KB|MB/.test(size), 'Odoo-Größenschätzung ' + size);
+  await editor.screenshot({ path: path.join(OUT, 'export-odoo.png') });
+
+  const results = await editor.evaluate(async () => {
+    await Editor.flushSaves();
+    const id = Editor.state.guide.id;
+    const html = await (await Exporter.html(id, { marker: true, crop: false, cover: false })).text();
+    const odoo = await Exporter.odoo(id, { marker: true, crop: true });
+    const md = await Exporter.markdown(id, { marker: true, crop: false });
+    const mdEntries = await Zip.read(md);
+    const mdText = new TextDecoder().decode(await mdEntries.get('anleitung.md').read());
+    const bak = await Exporter.backup(id);
+    const newId = await Exporter.importProject(bak);
+    const a = await DB.getSteps(id);
+    const b = await DB.getSteps(newId);
+    return {
+      html, odooHtml: odoo.html, mdText, mdFiles: Array.from(mdEntries.keys()),
+      roundtrip: a.length === b.length && a.every((s, i) => s.text === b[i].text && s.type === b[i].type && (s.imgW || 0) === (b[i].imgW || 0))
+    };
+  });
+  const htmlDec = results.html.replace(/&#39;/g, "'");
+  check(htmlDec.includes('Content-Security-Policy') && htmlDec.includes("script-src 'sha256-") && htmlDec.includes("default-src 'none'"), 'HTML-Export mit CSP');
+  check(!results.html.includes('<script>alert(1)') && results.html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'HTML-Export escaped Text');
+  check(!/https?:\/\//.test(results.html.replace(/http:\/\/www\.w3\.org\/2000\/svg/g, '')), 'HTML-Export lädt nichts von außen');
+  check(results.odooHtml.includes('data:image/webp') || results.odooHtml.includes('data:image/png'), 'Odoo-Export mit eingebetteten Bildern');
+  check(!results.odooHtml.includes('<script>'), 'Odoo-Export escaped');
+  check(results.mdText.includes('\\<script\\>') && results.mdFiles.some((f) => f.startsWith('bilder/')), 'Markdown escaped, Bilder im ZIP');
+  check(results.roundtrip, 'Projektsicherung: Export und Import ergeben dieselben Schritte');
+  fs.writeFileSync(path.join(OUT, 'export.html'), results.html);
+
+  // Exportierte Datei öffnen: CSP-Hashes müssen passen (Stil greift, kein CSP-Fehler).
+  const exp = await ctx.newPage();
+  const cspErrors = [];
+  exp.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) cspErrors.push(m.text()); });
+  await exp.goto('file://' + path.join(OUT, 'export.html'));
+  await exp.waitForTimeout(500);
+  const bg = await exp.evaluate(() => getComputedStyle(document.querySelector('.g-num')).backgroundColor);
+  check(bg === 'rgb(27, 29, 31)' && cspErrors.length === 0, `exportierte HTML-Datei rendert mit eigener CSP (${bg}, ${cspErrors.length} CSP-Fehler)`);
+  await exp.screenshot({ path: path.join(OUT, 'export-datei.png') });
+  await exp.close();
+
+  // Vorschau
+  const pv = await ctx.newPage();
+  await pv.goto(ext(`src/export/preview.html?guide=${guideId}&cover=0`));
+  await pv.waitForTimeout(1200);
+  await pv.screenshot({ path: path.join(OUT, 'vorschau.png'), fullPage: false });
+  check(await pv.locator('.g-step').count() >= 1, 'Vorschau rendert Schritte');
+
+  // Übersicht und Einstellungen
+  const ov = await ctx.newPage();
+  await ov.goto(ext('src/editor/editor.html'));
+  await ov.waitForTimeout(600);
+  check(await ov.locator('.ov-item').count() === 2, 'Übersicht zeigt beide Anleitungen');
+  await ov.screenshot({ path: path.join(OUT, 'uebersicht.png') });
+
+  // Popup bereit
+  const p2 = await ctx.newPage();
+  await p2.setViewportSize({ width: 360, height: 560 });
+  await p2.goto(ext('src/popup/popup.html'));
+  await p2.waitForTimeout(500);
+  await p2.screenshot({ path: path.join(OUT, 'popup-bereit.png') });
+
+  const st = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
+  check(st && st.ok && st.rec === null, 'kein Aufnahmezustand übrig');
+
+  check(errors.length === 0, 'keine Fehler in Erweiterungsseiten ' + JSON.stringify(errors));
+  await ctx.close();
+  server.close();
+  console.log(`\nScreenshots: ${OUT}`);
+  if (fails.length) {
+    console.log(`\n${fails.length} Prüfungen fehlgeschlagen`);
+    process.exit(1);
+  }
+  console.log('\nAlle Prüfungen bestanden');
+})().catch((e) => { console.error(e); process.exit(1); });

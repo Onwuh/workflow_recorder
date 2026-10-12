@@ -1,0 +1,13 @@
+body { background: var(--bg); }
+.opt { max-width: 720px; margin: 0 auto; padding: 32px 24px 64px; display: flex; flex-direction: column; gap: 16px; }
+.opt-head { display: flex; align-items: center; gap: 12px; }
+.opt-head h1 { margin: 0; font-size: 24px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { margin: 0; font-size: 16px; }
+.card p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--fg-2); }
+.card code { font-family: var(--mono); font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.msg { min-height: 1em; font-size: 13px !important; }
+.msg.bad { color: var(--danger) !important; }
+.msg.ok { color: var(--ok) !important; }
+.msg:empty { display: none; }
