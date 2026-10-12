@@ -1,0 +1,156 @@
+<title>Odoo Einfüge-Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column — Anleitung, Testinhalt, Auswertung */
+:root {
+  --bg: #F6F6F3; --surface: #FFFFFF; --fg: #1B1D1F; --muted: #5F6267;
+  --line: #DCDCD6; --accent: #2B59C3; --accent-soft: #EEF2FB;
+  --ok: #1D7A46; --ok-soft: #E6F4EC; --bad: #A12A21; --bad-soft: #FBEAE8;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #16181A; --surface: #1F2225; --fg: #ECEDEE; --muted: #A3A7AC;
+  --line: #34383C; --accent: #7EA2F2; --accent-soft: #22304F;
+  --ok: #6FD39B; --ok-soft: #173525; --bad: #F2948C; --bad-soft: #3D1F1C; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #16181A; --surface: #1F2225; --fg: #ECEDEE; --muted: #A3A7AC;
+  --line: #34383C; --accent: #7EA2F2; --accent-soft: #22304F;
+  --ok: #6FD39B; --ok-soft: #173525; --bad: #F2948C; --bad-soft: #3D1F1C; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 64px; display: flex; flex-direction: column; gap: 28px; }
+h1 { margin: 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
+h2 { margin: 0; font-size: 17px; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+.label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+ol.howto { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+button { font-family: inherit; font-size: 15px; font-weight: 600; height: 44px; padding: 0 20px; border: 0; border-radius: 9px; background: var(--accent); color: var(--surface); cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+#status { font-size: 14px; color: var(--muted); min-height: 1.5em; }
+#status.ok { color: var(--ok); } #status.bad { color: var(--bad); }
+#sample { border: 1px dashed var(--line); border-radius: 8px; padding: 18px; min-width: 0; overflow-wrap: anywhere; }
+#sample img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
+.meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.results { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.res { border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.res.ok { background: var(--ok-soft); } .res.bad { background: var(--bad-soft); }
+.res strong { font-size: 14px; } .res.ok strong { color: var(--ok); } .res.bad strong { color: var(--bad); }
+.res span { font-size: 14px; }
+code { font-family: var(--mono); font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Odoo Einfüge-Test</h1>
+    <p class="lede">Prüft, ob der Editor in Odoo Wissen eingefügte Bilder als Anhänge speichert oder als eingebetteten Bildcode im Artikel lässt.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-how">
+    <h2 id="h-how">Ablauf</h2>
+    <ol class="howto">
+      <li>Unten auf „Testinhalt kopieren“ klicken.</li>
+      <li>In Odoo Wissen einen neuen, leeren Artikel anlegen.</li>
+      <li>In den Artikel klicken und mit ⌘ V einfügen.</li>
+      <li>Kurz warten, dann den Artikel verlassen oder neu laden, damit er gespeichert wird.</li>
+      <li>Ergebnis prüfen wie unten beschrieben.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="h-sample">
+    <div class="bar">
+      <h2 id="h-sample">Testinhalt</h2>
+      <button id="copy" type="button">Testinhalt kopieren</button>
+    </div>
+    <p id="status" role="status"></p>
+    <div id="sample"></div>
+    <p class="meta" id="sizes"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-check">
+    <h2 id="h-check">Ergebnis prüfen</h2>
+    <p style="margin:0">Rechtsklick auf eines der Bilder im Artikel und „Bild in neuem Tab öffnen“ wählen. Dann die Adresse ansehen:</p>
+    <div class="results">
+      <div class="res ok"><strong>Gut</strong><span>Die Adresse enthält <code>/web/image/</code>. Odoo hat das Bild als Anhang gespeichert, der Export per Kopieren funktioniert.</span></div>
+      <div class="res bad"><strong>Schlecht</strong><span>Die Adresse beginnt mit <code>data:image</code>. Das Bild steckt als Code im Artikel. Dann brauchen wir einen anderen Weg.</span></div>
+    </div>
+    <p style="margin:0;color:var(--muted)">Ebenfalls interessant: ob beide Bilder überhaupt erscheinen, ob die Nummerierung erhalten bleibt und ob das große Bild Odoo spürbar bremst.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  function shot(w, h, title, cx, cy) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var g = c.getContext('2d'); var s = w / 1600;
+    g.fillStyle = '#FAFAF8'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#2E3034'; g.fillRect(0, 0, w, 64 * s);
+    g.fillStyle = '#6E7176';
+    for (var i = 0; i < 4; i++) g.fillRect((90 + i * 140) * s, 26 * s, 100 * s, 12 * s);
+    g.fillStyle = '#4A6FD0'; g.fillRect(40 * s, 100 * s, 150 * s, 52 * s);
+    g.fillStyle = '#E3E4E0'; g.fillRect(205 * s, 100 * s, 130 * s, 52 * s);
+    g.fillStyle = '#1B1D1F'; g.font = (600 * 0 + 34 * s) + 'px sans-serif';
+    g.fillText(title, 40 * s, 230 * s);
+    for (var r = 0; r < 6; r++) {
+      var y = (290 + r * 90) * s;
+      g.fillStyle = '#B8BAB4'; g.fillRect(40 * s, y, 160 * s, 12 * s);
+      g.fillStyle = '#CFD0CB'; g.fillRect(40 * s, y + 46 * s, 620 * s, 2 * s);
+      g.fillStyle = '#B8BAB4'; g.fillRect(820 * s, y, 140 * s, 12 * s);
+      g.fillStyle = '#CFD0CB'; g.fillRect(820 * s, y + 46 * s, 620 * s, 2 * s);
+    }
+    g.strokeStyle = '#C8372D'; g.lineWidth = 6 * s; g.fillStyle = 'rgba(200,55,45,0.12)';
+    g.beginPath(); g.arc(cx * s, cy * s, 48 * s, 0, Math.PI * 2); g.fill(); g.stroke();
+    return c.toDataURL('image/jpeg', 0.85);
+  }
+
+  var img1 = shot(1600, 1000, 'Testbild 1 · 1600 × 1000', 115, 126);
+  var img2 = shot(1200, 750, 'Testbild 2 · 1200 × 750', 270, 126);
+
+  var html =
+    '<h2>Testanleitung: Angebot anlegen</h2>' +
+    '<p>Diese Anleitung dient nur dazu, das Einfügen in Odoo Wissen zu testen.</p>' +
+    '<ol>' +
+      '<li><p><strong>Klicke auf „Neu“</strong></p><p><img src="' + img1 + '" alt="Schritt 1: Klick auf Neu" width="800"></p></li>' +
+      '<li><p><strong>Klicke auf „Speichern“</strong></p><p><img src="' + img2 + '" alt="Schritt 2: Klick auf Speichern" width="800"></p></li>' +
+    '</ol>' +
+    '<blockquote><p>Hinweis: Neue Kunden können direkt im Feld angelegt werden.</p></blockquote>';
+
+  var text = 'Testanleitung: Angebot anlegen\n\n1. Klicke auf „Neu“\n2. Klicke auf „Speichern“\n\nHinweis: Neue Kunden können direkt im Feld angelegt werden.';
+
+  var sample = document.getElementById('sample');
+  sample.innerHTML = html;
+
+  function kb(d) { return Math.round((d.length - d.indexOf(',') - 1) * 3 / 4 / 1024); }
+  document.getElementById('sizes').textContent =
+    'Bild 1: ca. ' + kb(img1) + ' KB · Bild 2: ca. ' + kb(img2) + ' KB · HTML gesamt: ca. ' + Math.round(html.length / 1024) + ' KB';
+
+  var status = document.getElementById('status');
+  function say(msg, cls) { status.textContent = msg; status.className = cls || ''; }
+
+  function selectionCopy() {
+    var range = document.createRange(); range.selectNodeContents(sample);
+    var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (ok) { sel.removeAllRanges(); say('Kopiert (über Auswahl). Jetzt in Odoo einfügen.', 'ok'); }
+    else { say('Automatisches Kopieren wurde blockiert. Der Inhalt ist markiert, bitte jetzt ⌘ C drücken.', 'bad'); }
+  }
+
+  document.getElementById('copy').addEventListener('click', function () {
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        var item = new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        });
+        navigator.clipboard.write([item]).then(function () {
+          say('Kopiert. Jetzt in Odoo einfügen.', 'ok');
+        }, selectionCopy);
+      } else { selectionCopy(); }
+    } catch (e) { selectionCopy(); }
+  });
+})();
+</script>

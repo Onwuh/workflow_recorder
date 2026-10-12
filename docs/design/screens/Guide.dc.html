@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Geteilte Anleitung</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B59C3}a:hover{color:#1E4296}
+</style>
+</helmet>
+<div style="min-height: 1180px; background: #FFFFFF; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1B1D1F">
+  <header style="border-bottom: 1px solid #ECECE7">
+    <div style="max-width: 1040px; margin: 0 auto; padding: 20px 24px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center">
+      <div style="height: 36px; padding: 0 14px; border: 1px dashed #B9BBB5; border-radius: 6px; display: flex; align-items: center; font-size: 13px; color: #6B6E72">[KUNDENLOGO]</div>
+      <a href="#" style="font-size: 14px; display: flex; align-items: center; gap: 6px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"></path></svg>Drucken
+      </a>
+    </div>
+  </header>
+
+  <div style="max-width: 1040px; margin: 0 auto; padding: 40px 24px 64px; display: flex; flex-wrap: wrap; gap: 48px">
+    <nav aria-label="Inhalt" style="flex: 1 1 200px; max-width: 240px; display: flex; flex-direction: column; gap: 2px; font-size: 13px">
+      <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6B6E72; margin-bottom: 8px">Schritte</span>
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+        <a href="#" style="display: flex; gap: 10px; padding: 7px 0; text-decoration: none; color: #3A3D41"><span style="font-family: 'IBM Plex Mono', monospace; color: #6B6E72">{{s.num}}</span>{{s.text}}</a>
+      </sc-for>
+    </nav>
+
+    <article style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 40px">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <h1 style="margin: 0; font-size: 36px; line-height: 1.15; font-weight: 700">Angebot anlegen und versenden</h1>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #6B6E72">
+          <span>14 Schritte</span><span>ca. 3 Minuten</span><span>Stand: [DATUM]</span>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 16px; line-height: 1.6; color: #3A3D41">So legen Sie ein Angebot an und senden es per E-Mail an den Kunden.</p>
+      </div>
+
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+        <section style="display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; gap: 14px; align-items: center">
+            <span style="flex: none; width: 32px; height: 32px; border-radius: 50%; background: #1B1D1F; color: #FFFFFF; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center">{{s.n}}</span>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 600">{{s.text}}</h2>
+          </div>
+          <div role="img" aria-label="Screenshot zu diesem Schritt" style="height: 240px; border: 1px solid #DCDCD6; border-radius: 8px; background: #FAFAF8; position: relative; overflow: hidden">
+            <div style="height: 28px; background: #2E3034"></div>
+            <div style="position: absolute; left: 24px; top: 52px; width: 45%; height: 10px; border-radius: 5px; background: #D7D8D3"></div>
+            <div style="position: absolute; left: 24px; top: 80px; width: 70%; height: 10px; border-radius: 5px; background: #E4E5E1"></div>
+            <div style="position: absolute; left: 24px; top: 108px; width: 60%; height: 10px; border-radius: 5px; background: #E4E5E1"></div>
+            <div style="position: absolute; left: 24px; top: 150px; width: 82%; height: 56px; border-radius: 6px; background: #F0F0EC"></div>
+            <div style="{{s.marker}}"></div>
+          </div>
+          <sc-if value="{{s.hasTip}}" hint-placeholder-val="{{ false }}">
+            <p style="margin: 0; padding: 12px 14px; border-radius: 8px; background: #EEF2FB; font-size: 14px; line-height: 1.5; color: #1E3A7A">{{s.tip}}</p>
+          </sc-if>
+        </section>
+      </sc-for>
+
+      <footer style="padding-top: 24px; border-top: 1px solid #ECECE7; font-size: 12px; color: #6B6E72">Erstellt von [NAME] · [FIRMA]</footer>
+    </article>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      { text: 'Öffne die App „Verkauf“', x: 12, y: 6 },
+      { text: 'Klicke auf „Neu“', x: 6, y: 42 },
+      { text: 'Wähle bei „Kunde“ einen Eintrag aus', x: 30, y: 50, tip: 'Neue Kunden können Sie direkt im Feld anlegen.' },
+      { text: 'Klicke auf „Zeile hinzufügen“', x: 8, y: 72 },
+      { text: 'Wähle „Produkt“ aus der Liste', x: 40, y: 72 }
+    ];
+    const steps = raw.map((r, i) => ({
+      n: String(i + 1),
+      num: String(i + 1).padStart(2, '0'),
+      text: r.text,
+      hasTip: !!r.tip,
+      tip: r.tip || '',
+      marker: 'position: absolute; left: ' + r.x + '%; top: ' + r.y + '%; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #C8372D; background: rgba(200,55,45,0.10); box-sizing: border-box;'
+    }));
+    return { steps };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Export</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B59C3}a:hover{color:#1E4296}
+</style>
+</helmet>
+<div style="width: 560px; height: 640px; box-sizing: border-box; background: #FFFFFF; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1B1D1F; display: flex; flex-direction: column; border: 1px solid #DCDCD6; border-radius: 14px; overflow: hidden">
+  <div style="padding: 22px 24px 16px; display: flex; justify-content: space-between; align-items: flex-start">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 600">Anleitung exportieren</h2>
+      <span style="font-size: 13px; color: #6B6E72">Angebot anlegen und versenden · 14 Schritte</span>
+    </div>
+    <button aria-label="Schließen" style="width: 36px; height: 36px; border: 0; background: transparent; border-radius: 8px; color: #5C5F63; cursor: pointer; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </button>
+  </div>
+
+  <div style="padding: 0 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+    <sc-for list="{{formats}}" as="f" hint-placeholder-count="4">
+      <button onClick="{{f.pick}}" style="{{f.style}}">
+        <span style="font-size: 14px; font-weight: 600">{{f.label}}</span>
+        <span style="font-size: 12px; color: #6B6E72; line-height: 1.4">{{f.hint}}</span>
+      </button>
+    </sc-for>
+  </div>
+
+  <div style="margin: 18px 24px 0; padding: 16px; border-radius: 10px; background: #F6F6F3; display: flex; flex-direction: column; gap: 12px; flex: 1">
+    <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6B6E72">Optionen</span>
+    <sc-if value="{{isOdoo}}" hint-placeholder-val="{{ false }}">
+      <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45; color: #3A3D41">
+        <li>Auf „Kopieren“ klicken</li>
+        <li>In Odoo Wissen einen neuen Artikel anlegen</li>
+        <li>In den Artikel klicken und einfügen (⌘ V)</li>
+      </ol>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: #FFFFFF; border: 1px solid #DCDCD6; font-size: 13px">
+        <span style="color: #3A3D41">Bilder zugeschnitten, max. 1000 px, WebP</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; color: #1B1D1F">≈ 420 KB</span>
+      </div>
+    </sc-if>
+    <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #3A3D41; min-height: 28px">
+      <input type="checkbox" checked style="width: 16px; height: 16px; accent-color: #2B59C3">
+      Titelseite mit Kundenlogo
+    </label>
+    <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #3A3D41; min-height: 28px">
+      <input type="checkbox" checked style="width: 16px; height: 16px; accent-color: #2B59C3">
+      Klickpunkt im Screenshot markieren
+    </label>
+    <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #3A3D41; min-height: 28px">
+      <input type="checkbox" style="width: 16px; height: 16px; accent-color: #2B59C3">
+      Screenshots auf Klickbereich zuschneiden
+    </label>
+    <div style="margin-top: auto; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; background: #FFF4E5; color: #6A3F00; font-size: 12px; line-height: 1.45">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+      <span>2 Schritte enthalten ungeschwärzte Eingabefelder. <a href="#">Prüfen</a></span>
+    </div>
+  </div>
+
+  <div style="padding: 16px 24px 22px; display: flex; justify-content: flex-end; gap: 10px">
+    <button style="height: 44px; padding: 0 18px; border: 1px solid #CFD0CB; border-radius: 9px; background: #FFFFFF; font-family: inherit; font-size: 14px; color: #1B1D1F; cursor: pointer">Abbrechen</button>
+    <button style="height: 44px; padding: 0 20px; border: 0; border-radius: 9px; background: #2B59C3; font-family: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; cursor: pointer">{{cta}}</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":560,"height":640}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: 'html' };
+  }
+  renderVals() {
+    const defs = [
+      { id: 'html', label: 'HTML-Datei', hint: 'Eine Datei, öffnet in jedem Browser', cta: 'HTML herunterladen' },
+      { id: 'pdf', label: 'PDF', hint: 'Zum Anhängen und Drucken', cta: 'PDF herunterladen' },
+      { id: 'odoo', label: 'Odoo Wissen', hint: 'Kopieren und in einen Artikel einfügen', cta: 'In Zwischenablage kopieren' },
+      { id: 'md', label: 'Markdown', hint: 'Text plus Bilderordner als ZIP', cta: 'ZIP herunterladen' }
+    ];
+    const base = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 14px; border-radius: 10px; font-family: inherit; color: #1B1D1F; cursor: pointer; min-height: 76px; box-sizing: border-box; ';
+    const formats = defs.map((d) => ({
+      ...d,
+      style: base + (d.id === this.state.picked ? 'border: 2px solid #2B59C3; background: #EEF2FB;' : 'border: 1px solid #DCDCD6; background: #FFFFFF; margin: 1px;'),
+      pick: () => this.setState({ picked: d.id })
+    }));
+    const cur = defs.find((d) => d.id === this.state.picked);
+    return { formats, isOdoo: this.state.picked === 'odoo', cta: cur.cta };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Aufnahme läuft</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B59C3}a:hover{color:#1E4296}
+</style>
+</helmet>
+<div style="width: 360px; height: 560px; box-sizing: border-box; background: #FFFFFF; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1B1D1F; display: flex; flex-direction: column; border: 1px solid #DCDCD6; border-radius: 12px; overflow: hidden">
+  <div style="padding: 18px; background: #1B1D1F; color: #FFFFFF; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em"><span style="width: 10px; height: 10px; border-radius: 50%; background: #FF5A4E; display: block"></span>AUFNAHME</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C9CBCE">04:37</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px">
+      <span style="font-size: 44px; font-weight: 700; line-height: 1">7</span>
+      <span style="font-size: 14px; color: #C9CBCE">Schritte erfasst</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      <button style="height: 44px; border: 1px solid #4A4D52; border-radius: 9px; background: transparent; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>Pause
+      </button>
+      <button style="height: 44px; border: 0; border-radius: 9px; background: #FFFFFF; color: #1B1D1F; font-family: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>Fertig
+      </button>
+    </div>
+  </div>
+
+  <div style="padding: 14px 18px 6px; display: flex; justify-content: space-between; align-items: center">
+    <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6B6E72">Letzte Schritte</span>
+    <button style="border: 0; background: transparent; font-family: inherit; font-size: 13px; color: #2B59C3; min-height: 32px; cursor: pointer">Letzten verwerfen</button>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 0 12px 12px; overflow: hidden">
+    <div style="display: flex; gap: 12px; align-items: center; padding: 8px 6px; border-radius: 8px; background: #EEF2FB">
+      <div style="width: 64px; height: 40px; border-radius: 5px; background: #E4E5E1; position: relative; flex: none; overflow: hidden">
+        <div style="position: absolute; left: 6px; top: 6px; width: 30px; height: 4px; background: #C6C8C3; border-radius: 2px"></div>
+        <div style="position: absolute; right: 8px; bottom: 8px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #C8372D; box-sizing: border-box"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+        <span style="font-size: 12px; color: #6B6E72; font-family: 'IBM Plex Mono', monospace">07</span>
+        <span style="font-size: 13px; font-weight: 500">Klicke auf „Bestätigen“</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center; padding: 8px 6px">
+      <div style="width: 64px; height: 40px; border-radius: 5px; background: #E4E5E1; position: relative; flex: none; overflow: hidden">
+        <div style="position: absolute; left: 6px; top: 14px; width: 40px; height: 8px; background: #FFFFFF; border: 1px solid #C6C8C3"></div>
+        <div style="position: absolute; left: 30px; top: 10px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #C8372D; box-sizing: border-box"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+        <span style="font-size: 12px; color: #6B6E72; font-family: 'IBM Plex Mono', monospace">06</span>
+        <span style="font-size: 13px; font-weight: 500">Gib bei „Menge“ einen Wert ein</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center; padding: 8px 6px">
+      <div style="width: 64px; height: 40px; border-radius: 5px; background: #E4E5E1; position: relative; flex: none; overflow: hidden">
+        <div style="position: absolute; left: 6px; top: 6px; width: 50px; height: 26px; background: #FFFFFF; border: 1px solid #C6C8C3"></div>
+        <div style="position: absolute; left: 12px; top: 12px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #C8372D; box-sizing: border-box"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+        <span style="font-size: 12px; color: #6B6E72; font-family: 'IBM Plex Mono', monospace">05</span>
+        <span style="font-size: 13px; font-weight: 500">Wähle „Produkt“ aus der Liste</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center; padding: 8px 6px">
+      <div style="width: 64px; height: 40px; border-radius: 5px; background: #E4E5E1; position: relative; flex: none; overflow: hidden">
+        <div style="position: absolute; left: 6px; top: 6px; width: 18px; height: 6px; background: #2B59C3; border-radius: 2px"></div>
+        <div style="position: absolute; left: 8px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #C8372D; box-sizing: border-box"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+        <span style="font-size: 12px; color: #6B6E72; font-family: 'IBM Plex Mono', monospace">04</span>
+        <span style="font-size: 13px; font-weight: 500">Klicke auf „Zeile hinzufügen“</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 12px 18px; border-top: 1px solid #ECECE7; font-size: 12px; color: #6B6E72">
+    Tab: <span style="color: #3A3D41">[KUNDEN-INSTANZ].odoo.com</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":360,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
