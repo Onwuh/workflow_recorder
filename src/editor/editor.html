@@ -93,6 +93,12 @@
           <button class="tool" data-tool="text" type="button" aria-pressed="false">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 6V4h14v2M12 4v16M9 20h6"></path></svg>Text
           </button>
+          <button class="tool" data-tool="rect" type="button" aria-pressed="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1.5"></rect></svg>Rechteck
+          </button>
+          <button class="tool" data-tool="ellipse" type="button" aria-pressed="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="6"></ellipse></svg>Kreis
+          </button>
           <button id="ed-undo" class="tool" type="button" disabled title="Letzte Bildänderung rückgängig machen">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>Rückgängig
           </button>
@@ -102,6 +108,8 @@
         </div>
 
         <p id="ed-hint" class="tool-hint" role="status"></p>
+
+        <div id="ed-colors" class="colors" role="radiogroup" aria-label="Farbe" hidden></div>
 
         <div id="ed-stage" class="stage">
           <img id="ed-img" alt="Screenshot des Schritts">
@@ -114,11 +122,11 @@
           <button id="ed-crop-cancel" class="btn" type="button">Abbrechen</button>
         </div>
 
-        <div id="ed-text-bar" class="sub-bar" hidden>
-          <label class="field grow">Text
+        <div id="ed-anno-bar" class="sub-bar" hidden>
+          <label id="ed-anno-text-wrap" class="field grow">Text
             <input id="ed-anno-text" class="input" type="text" maxlength="80">
           </label>
-          <button id="ed-anno-remove" class="btn btn-danger" type="button">Text entfernen</button>
+          <button id="ed-anno-remove" class="btn btn-danger" type="button">Entfernen</button>
         </div>
 
         <div class="step-opts">

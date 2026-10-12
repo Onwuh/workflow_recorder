@@ -24,7 +24,7 @@ Bekannte Lücke: Datensatznamen in Breadcrumb, Listenansichten und Chatter erfas
 ## Editor
 
 - Schrittliste mit Auswahl, Schritttext bearbeiten, Schritte löschen.
-- Werkzeuge: Schwärzung bearbeiten (hinzufügen und per Klick entfernen), Zuschneiden, Klickpunkt verschieben, Pfeil, Text.
+- Werkzeuge: Schwärzung bearbeiten (hinzufügen und per Klick entfernen), Zuschneiden, Klickpunkt verschieben, Pfeil, Text, Rechteck, Kreis/Oval. Pfeil, Text und Formen haben eine wählbare Farbe (Lila als Standard, Rot, Blau, Grün, Gelb, Schwarz, Weiß) und lassen sich auswählen, verschieben, an Griffen ändern und mit Entf löschen.
 - Optionale Einleitung und Hinweise pro Schritt.
 
 ## Speicherung

@@ -205,27 +205,90 @@ function check(cond, msg) {
   check(tools.map((t) => t.trim()).join('|').startsWith('Schwärzung bearbeiten|Zuschneiden|Klickpunkt verschieben|Pfeil|Text|'),
     'Werkzeuge: ' + tools.map((t) => t.trim()).join(', '));
 
-  // Pfeil: ziehen erzeugt einen Pfeil, Klick auf den Pfeil entfernt ihn
-  const box2 = await editor.locator('#ed-stage').boundingBox();
+  // Pfeil: Standardfarbe Lila, Farbe wählbar, auswählbar, verschiebbar, Entf löscht
+  const annos = async () => editor.evaluate(async () => (await DB.getStep(Editor.state.steps[0].id)).annotations || []);
   await editor.click('[data-tool="arrow"]');
+  let box2 = await editor.locator('#ed-stage').boundingBox();
+  check(await editor.locator('#ed-colors').isVisible() && (await editor.locator('#ed-colors .swatch').count()) === 7, 'Farbleiste mit 7 Farben');
   await editor.mouse.move(box2.x + 40, box2.y + 120);
   await editor.mouse.down();
   await editor.mouse.move(box2.x + 200, box2.y + 120, { steps: 5 });
   await editor.mouse.up();
   await editor.waitForTimeout(300);
-  const annos = async () => editor.evaluate(async () => (await DB.getStep(Editor.state.steps[0].id)).annotations || []);
   let an = await annos();
-  check(an.length === 1 && an[0].type === 'arrow' && !an[0].text, 'Pfeil ohne Text angelegt');
-  await editor.mouse.click(box2.x + 120, box2.y + 120);
+  check(an.length === 1 && an[0].type === 'arrow' && an[0].color === '#7A4FD1', 'Pfeil in Lila angelegt ' + JSON.stringify(an[0]));
+  await editor.click('#ed-colors [aria-label="Blau"]');
   await editor.waitForTimeout(300);
   an = await annos();
-  check(an.length === 0, 'Pfeil per Klick entfernt');
+  check(an[0].color === '#2B59C3', 'Farbe der Auswahl auf Blau geändert');
+  // verschieben
+  const x1 = an[0].x1;
+  const y1 = an[0].y1;
+  await editor.mouse.move(box2.x + 120, box2.y + 120);
+  await editor.mouse.down();
+  await editor.mouse.move(box2.x + 120, box2.y + 160, { steps: 5 });
+  await editor.mouse.up();
+  await editor.waitForTimeout(300);
+  an = await annos();
+  check(an.length === 1 && Math.abs(an[0].x1 - x1) < 1 && an[0].y1 > y1 + 5, 'Pfeil verschoben');
+  await editor.keyboard.press('Delete');
+  await editor.waitForTimeout(300);
+  an = await annos();
+  check(an.length === 0, 'Pfeil mit Entf gelöscht');
+
+  // Rechteck: aufziehen, an der Ecke vergrößern; Kreis: oval aufziehen
+  await editor.click('#ed-colors [aria-label="Grün"]');
+  await editor.click('[data-tool="rect"]');
+  box2 = await editor.locator('#ed-stage').boundingBox();
+  await editor.mouse.move(box2.x + 300, box2.y + 60);
+  await editor.mouse.down();
+  await editor.mouse.move(box2.x + 400, box2.y + 120, { steps: 5 });
+  await editor.mouse.up();
+  await editor.waitForTimeout(300);
+  an = await annos();
+  const r0 = an[0];
+  check(an.length === 1 && r0.type === 'rect' && r0.color === '#1D7A46' && r0.w > 0 && r0.h > 0, 'Rechteck in Grün angelegt');
+  await editor.mouse.move(box2.x + 400, box2.y + 120);
+  await editor.mouse.down();
+  await editor.mouse.move(box2.x + 460, box2.y + 200, { steps: 5 });
+  await editor.mouse.up();
+  await editor.waitForTimeout(300);
+  an = await annos();
+  check(an[0].w > r0.w && an[0].h > r0.h && Math.abs(an[0].x - r0.x) < 1, 'Rechteck über Eckgriff vergrößert');
+  await editor.click('[data-tool="ellipse"]');
+  await editor.mouse.move(box2.x + 500, box2.y + 60);
+  await editor.mouse.down();
+  await editor.mouse.move(box2.x + 700, box2.y + 120, { steps: 5 });
+  await editor.mouse.up();
+  await editor.waitForTimeout(300);
+  an = await annos();
+  check(an.length === 2 && an[1].type === 'ellipse' && an[1].w > 2 * an[1].h, 'Oval aufgezogen');
+  const shapePx = await editor.evaluate(async () => {
+    const st = await DB.getStep(Editor.state.steps[0].id);
+    const r = st.annotations[0];
+    const out = (await Render.renderStep(st, { marker: false })).blob;
+    const bmp = await createImageBitmap(out);
+    const c = new OffscreenCanvas(bmp.width, bmp.height);
+    const g = c.getContext('2d');
+    g.drawImage(bmp, 0, 0);
+    return Array.from(g.getImageData(Math.round(r.x + r.w / 2), Math.round(r.y), 1, 1).data);
+  });
+  check(shapePx[0] === 0x1D && shapePx[1] === 0x7A && shapePx[2] === 0x46, 'Rechteck im Export in Grün ' + shapePx);
+  await editor.screenshot({ path: path.join(OUT, 'editor-formen.png') });
+  // Formen wieder entfernen, damit die folgenden Prüfungen unverändert bleiben
+  await editor.keyboard.press('Delete');
+  await editor.mouse.click(box2.x + 350, box2.y + 60);
+  await editor.waitForTimeout(200);
+  await editor.keyboard.press('Delete');
+  await editor.waitForTimeout(300);
+  check((await annos()).length === 0, 'Formen gelöscht');
 
   // Text: Klick setzt eine Textbox, Eingabe ändert sie, sie erscheint im Export
   await editor.click('[data-tool="text"]');
+  box2 = await editor.locator('#ed-stage').boundingBox();
   await editor.mouse.click(box2.x + 60, box2.y + 180);
   await editor.waitForTimeout(200);
-  check(await editor.locator('#ed-text-bar').isVisible(), 'Textfeld erscheint nach Klick');
+  check(await editor.locator('#ed-anno-bar').isVisible(), 'Textfeld erscheint nach Klick');
   await editor.fill('#ed-anno-text', 'Hier klicken');
   await editor.waitForTimeout(600);
   an = await annos();
@@ -240,7 +303,7 @@ function check(cond, msg) {
     g.drawImage(bmp, 0, 0);
     return Array.from(g.getImageData(Math.round(a.x + 3), Math.round(a.y), 1, 1).data);
   });
-  check(textPx[0] === 0xC8 && textPx[1] === 0x37 && textPx[2] === 0x2D, 'Textbox im Export eingezeichnet ' + textPx);
+  check(textPx[0] === 0x1D && textPx[1] === 0x7A && textPx[2] === 0x46, 'Textbox im Export in der gewählten Farbe ' + textPx);
   await editor.screenshot({ path: path.join(OUT, 'editor-text.png') });
   await editor.click('[data-tool="text"]');
 

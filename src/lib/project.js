@@ -29,22 +29,36 @@ var Project = (() => {
     return num(v, 0, 8.64e15, Date.now());
   }
 
+  const COLORS = ['#7A4FD1', '#C8372D', '#2B59C3', '#1D7A46', '#F2C200', '#1B1D1F', '#FFFFFF'];
+
+  /** Farbe nur aus der Palette; fehlt sie, bleibt das Feld weg (ältere Pfeile/Texte: rot). */
+  function withColor(out, a) {
+    if (COLORS.includes(a.color)) out.color = a.color;
+    return out;
+  }
+
   function annotation(a, imgW, imgH) {
     if (!a || typeof a !== 'object') return null;
     if (a.type === 'text') {
       const text = line(a.text, 80);
       if (!text) return null;
-      return { type: 'text', x: num(a.x, -imgW, 2 * imgW, 0), y: num(a.y, -imgH, 2 * imgH, 0), text };
+      return withColor({ type: 'text', x: num(a.x, -imgW, 2 * imgW, 0), y: num(a.y, -imgH, 2 * imgH, 0), text }, a);
+    }
+    if (a.type === 'rect' || a.type === 'ellipse') {
+      const w = num(a.w, 1, 2 * imgW, NaN);
+      const h = num(a.h, 1, 2 * imgH, NaN);
+      if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
+      return withColor({ type: a.type, x: num(a.x, -imgW, 2 * imgW, 0), y: num(a.y, -imgH, 2 * imgH, 0), w, h }, a);
     }
     if (a.type !== 'arrow') return null;
-    return {
+    return withColor({
       type: 'arrow',
       x1: num(a.x1, -imgW, 2 * imgW, 0),
       y1: num(a.y1, -imgH, 2 * imgH, 0),
       x2: num(a.x2, -imgW, 2 * imgW, 0),
       y2: num(a.y2, -imgH, 2 * imgH, 0),
       text: line(a.text, 80)
-    };
+    }, a);
   }
 
   function redaction(q, imgW, imgH) {

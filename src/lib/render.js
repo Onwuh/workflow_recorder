@@ -8,6 +8,29 @@
 // eslint-disable-next-line no-unused-vars
 var Render = (() => {
   const REC = '#C8372D';
+
+  // Farben für Pfeil, Text und Formen. Standard Lila; ältere Annotationen ohne Farbe bleiben rot.
+  const COLORS = [
+    { id: 'lila', name: 'Lila', hex: '#7A4FD1' },
+    { id: 'rot', name: 'Rot', hex: '#C8372D' },
+    { id: 'blau', name: 'Blau', hex: '#2B59C3' },
+    { id: 'gruen', name: 'Grün', hex: '#1D7A46' },
+    { id: 'gelb', name: 'Gelb', hex: '#F2C200' },
+    { id: 'schwarz', name: 'Schwarz', hex: '#1B1D1F' },
+    { id: 'weiss', name: 'Weiß', hex: '#FFFFFF' }
+  ];
+  const DEFAULT_COLOR = '#7A4FD1';
+  const HEXES = new Set(COLORS.map((c) => c.hex));
+
+  /** Nur Farben aus der Palette; sonst die Vorgabe (fehlend = Rot für ältere Pfeile/Texte). */
+  function colorOf(a) {
+    return a && HEXES.has(a.color) ? a.color : REC;
+  }
+
+  /** Schriftfarbe auf der Textbox: dunkel auf hellen Farben, sonst weiß. */
+  function textInk(hex) {
+    return hex === '#FFFFFF' || hex === '#F2C200' ? '#1B1D1F' : '#FFFFFF';
+  }
   const REDACT = '#1B1D1F';
   const MAX_DIM = 16384;
 
@@ -79,9 +102,10 @@ var Render = (() => {
     const { x1, y1, x2, y2 } = a;
     const ang = Math.atan2(y2 - y1, x2 - x1);
     const head = 14 * s;
+    const col = colorOf(a);
     g.save();
-    g.strokeStyle = REC;
-    g.fillStyle = REC;
+    g.strokeStyle = col;
+    g.fillStyle = col;
     g.lineWidth = 4 * s;
     g.lineCap = 'round';
     const len = Math.hypot(x2 - x1, y2 - y1);
@@ -109,9 +133,9 @@ var Render = (() => {
       bx = Math.max(0, Math.min(g.canvas.width - tw - 2 * padX, bx));
       by = Math.max(0, Math.min(g.canvas.height - bh, by));
       roundRect(g, bx, by, tw + 2 * padX, bh, 5 * s);
-      g.fillStyle = REC;
+      g.fillStyle = col;
       g.fill();
-      g.fillStyle = '#FFFFFF';
+      g.fillStyle = textInk(col);
       g.textBaseline = 'middle';
       g.fillText(a.text, bx + padX, by + bh / 2);
     }
@@ -133,16 +157,39 @@ var Render = (() => {
   function drawText(g, a, s) {
     if (!a.text) return;
     const b = textBox(a.text, s);
+    const col = colorOf(a);
     g.save();
     roundRect(g, a.x, a.y - b.h / 2, b.w, b.h, b.r);
-    g.fillStyle = REC;
+    g.fillStyle = col;
     g.fill();
+    if (col === '#FFFFFF') {
+      // Weiße Box braucht eine Kante, sonst verschwindet sie auf hellem Grund.
+      g.lineWidth = 1.5 * s;
+      g.strokeStyle = '#6B6E72';
+      g.stroke();
+    }
     g.font = FONT.replace('{px}', b.fs);
-    g.fillStyle = '#FFFFFF';
+    g.fillStyle = textInk(col);
     g.textBaseline = 'middle';
     g.fillText(a.text, a.x + b.padX, a.y);
     g.restore();
   }
+
+  /** Rechteck oder Ellipse als Umriss. */
+  function drawShape(g, a, s) {
+    const r = { x: Math.min(a.x, a.x + a.w), y: Math.min(a.y, a.y + a.h), w: Math.abs(a.w), h: Math.abs(a.h) };
+    if (!(r.w >= 1 && r.h >= 1)) return;
+    g.save();
+    g.strokeStyle = colorOf(a);
+    g.lineWidth = 4 * s;
+    g.beginPath();
+    if (a.type === 'ellipse') g.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, Math.PI * 2);
+    else if (g.roundRect) g.roundRect(r.x, r.y, r.w, r.h, 4 * s);
+    else g.rect(r.x, r.y, r.w, r.h);
+    g.stroke();
+    g.restore();
+  }
+
 
   /** Bereich um den Klickpunkt (für „auf Klickbereich zuschneiden“). */
   function clickRegion(step, cssW = 900, cssH = 560) {
@@ -177,6 +224,7 @@ var Render = (() => {
         for (const a of step.annotations || []) {
           if (a && a.type === 'arrow') drawArrow(g, a, s);
           else if (a && a.type === 'text') drawText(g, a, s);
+          else if (a && (a.type === 'rect' || a.type === 'ellipse')) drawShape(g, a, s);
         }
       }
       if (opts.marker && step.showMarker !== false) {
@@ -215,7 +263,7 @@ var Render = (() => {
       const vw = r.w * cssPerPx;
       const vh = r.h * (step.vh / bmp.height);
       const inside = x >= 0 && y >= 0 && x <= vw && y <= vh;
-      const annotations = (step.annotations || []).map((a) => (a.type === 'text'
+      const annotations = (step.annotations || []).map((a) => (a.type !== 'arrow'
         ? { ...a, x: a.x - r.x, y: a.y - r.y }
         : { ...a, x1: a.x1 - r.x, y1: a.y1 - r.y, x2: a.x2 - r.x, y2: a.y2 - r.y }));
       const redactions = (step.redactions || [])
@@ -261,5 +309,5 @@ var Render = (() => {
     }
   }
 
-  return { toJpeg, textBox, renderStep, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
+  return { COLORS, DEFAULT_COLOR, colorOf, textInk, toJpeg, textBox, renderStep, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
 })();

@@ -308,8 +308,8 @@ var Exporter = (() => {
       // Maße aus dem echten Bild, Verhältnis zum Viewport beibehalten.
       const kx = img.width / s.imgW;
       const ky = img.height / s.imgH;
-      const annotations = s.annotations.map((a) => (a.type === 'text'
-        ? { ...a, x: a.x * kx, y: a.y * ky }
+      const annotations = s.annotations.map((a) => (a.type !== 'arrow'
+        ? { ...a, x: a.x * kx, y: a.y * ky, ...(a.w != null ? { w: a.w * kx, h: a.h * ky } : {}) }
         : { ...a, x1: a.x1 * kx, y1: a.y1 * ky, x2: a.x2 * kx, y2: a.y2 * ky }));
       const redactions = s.redactions.map((q) => ({ ...q, x: q.x * kx, y: q.y * ky, w: q.w * kx, h: q.h * ky }));
       prepared.push({ ...s, image: img.blob, imgW: img.width, imgH: img.height, annotations, redactions });

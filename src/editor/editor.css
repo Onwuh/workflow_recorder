@@ -160,3 +160,12 @@ body { background: var(--bg); min-height: 100vh; }
   .ex-formats { grid-template-columns: 1fr; }
   .ov-item { flex-wrap: wrap; }
 }
+
+/* Farbwahl für Pfeil, Text und Formen */
+.colors { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: -6px; }
+.colors .lbl { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.swatch {
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--surface); padding: 0;
+  box-shadow: 0 0 0 1px var(--line-input); cursor: pointer;
+}
+.swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--fg); }
