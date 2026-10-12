@@ -1,0 +1,301 @@
+/* Exporte: HTML, PDF (über die Druckansicht), Odoo-Zwischenablage, Markdown-ZIP, Projektsicherung.
+   Alle Texte werden escaped. Bilder entstehen immer neu aus dem gespeicherten (bereits geschwärzten) Bild,
+   Klickmarker und Pfeile werden dabei fest eingezeichnet. */
+'use strict';
+
+// eslint-disable-next-line no-unused-vars
+var Exporter = (() => {
+  const api = globalThis.browser ?? globalThis.chrome;
+  const esc = U.escapeHtml;
+
+  async function load(guideId) {
+    const guide = await DB.getGuide(guideId);
+    if (!guide) throw new Error('Anleitung nicht gefunden');
+    const steps = await DB.getSteps(guideId);
+    return { guide, steps };
+  }
+
+  /** Nummeriert die Schritte (Abschnitte zählen nicht mit). */
+  function number(steps) {
+    let n = 0;
+    return steps.map((s) => (s.type === 'section' ? { ...s, n: 0 } : { ...s, n: ++n }));
+  }
+
+  function stepCount(steps) {
+    return steps.filter((s) => s.type !== 'section').length;
+  }
+
+  function minutes(n) {
+    return Math.max(1, Math.ceil((n * 15) / 60));
+  }
+
+  function anchor(s, i) {
+    return s.type === 'section' ? `abschnitt-${i + 1}` : `schritt-${s.n}`;
+  }
+
+  /**
+   * Erzeugt Bilder für alle Schritte.
+   * as: 'dataurl' | 'objecturl'
+   */
+  async function renderImages(steps, opts, as, onProgress) {
+    const out = new Map();
+    let done = 0;
+    for (const s of steps) {
+      if (s.type === 'section' || !s.image) continue;
+      const r = await Render.renderStep(s, opts);
+      const src = as === 'objecturl' ? URL.createObjectURL(r.blob) : as === 'dataurl' ? await U.blobToDataUrl(r.blob) : null;
+      out.set(s.id, { src, width: r.width, height: r.height, bytes: r.blob.size, blob: r.blob });
+      if (onProgress) onProgress(++done);
+    }
+    return out;
+  }
+
+  /**
+   * HTML-Gerüst der Anleitung (nur der Inhalt von <body>).
+   * imgs: Map stepId -> { src, width, height }, logoSrc: string|null
+   */
+  function guideBody(guide, steps, imgs, { logoSrc = null, cover = false, footer = '' } = {}) {
+    const numbered = number(steps);
+    const count = stepCount(steps);
+    const meta = `<div class="g-meta"><span>${esc(U.stepsLabel(count))}</span><span>ca. ${minutes(count)} ${minutes(count) === 1 ? 'Minute' : 'Minuten'}</span><span>Stand: ${esc(U.dateDE(guide.updatedAt || Date.now()))}</span></div>`;
+    const showLogo = cover && logoSrc;
+    const toc = numbered.map((s, i) => (s.type === 'section'
+      ? `<a class="sec" href="#${anchor(s, i)}">${esc(s.text)}</a>`
+      : `<a href="#${anchor(s, i)}"><span class="n">${U.pad2(s.n)}</span><span>${esc(s.text)}</span></a>`)).join('');
+
+    const body = numbered.map((s, i) => {
+      if (s.type === 'section') {
+        return `<section class="g-sec" id="${anchor(s, i)}"><h2>${esc(s.text)}</h2>${s.note ? `<p>${esc(s.note)}</p>` : ''}</section>`;
+      }
+      const img = imgs.get(s.id);
+      const imgHtml = img
+        ? `<div class="g-img"><img src="${esc(img.src)}" width="${img.width}" height="${img.height}" alt="Screenshot zu Schritt ${s.n}"></div>`
+        : '';
+      return `<section class="g-step" id="${anchor(s, i)}"><div class="g-step-h"><span class="g-num">${s.n}</span><h2>${esc(s.text)}</h2></div>${imgHtml}${s.note ? `<p class="g-tip">${esc(s.note)}</p>` : ''}</section>`;
+    }).join('');
+
+    return `<div class="${showLogo ? 'has-cover' : ''}">` +
+      (showLogo ? `<section class="g-cover"><img src="${esc(logoSrc)}" alt="Logo"><h1>${esc(guide.title)}</h1>${meta}</section>` : '') +
+      `<header class="g-top"><div class="g-top-in"><div class="g-logo">${showLogo ? `<img src="${esc(logoSrc)}" alt="Logo">` : ''}</div>` +
+      '<button id="g-print" class="g-print" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"></path></svg>Drucken</button></div></header>' +
+      '<div class="g-main">' +
+      `<nav class="g-toc" aria-label="Inhalt"><span class="g-toc-h">Schritte</span>${toc}</nav>` +
+      '<article class="g-art">' +
+      `<div class="g-head"><h1>${esc(guide.title)}</h1>${meta}${guide.intro ? `<p class="g-intro">${esc(guide.intro)}</p>` : ''}</div>` +
+      body +
+      (footer ? `<footer class="g-foot">${esc(footer)}</footer>` : '') +
+      '</article></div></div>';
+  }
+
+  async function sha256b64(text) {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    let bin = '';
+    for (const b of new Uint8Array(d)) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }
+
+  async function guideCss() {
+    const r = await fetch(api.runtime.getURL('src/export/guide.css'));
+    return r.text();
+  }
+
+  async function logoDataUrl(guide) {
+    return guide.logo ? U.blobToDataUrl(guide.logo) : null;
+  }
+
+  // ---------- HTML ----------
+
+  async function html(guideId, opts, onProgress) {
+    const { guide, steps } = await load(guideId);
+    const settings = await Settings.get();
+    const imgs = await renderImages(steps, { marker: opts.marker, crop: opts.crop, type: 'image/png' }, 'dataurl', onProgress);
+    const css = await guideCss();
+    const js = "document.getElementById('g-print').addEventListener('click',function(){window.print()});";
+    const csp = `default-src 'none'; img-src data:; style-src 'sha256-${await sha256b64(css)}'; script-src 'sha256-${await sha256b64(js)}'; base-uri 'none'; form-action 'none'`;
+    const doc = '<!doctype html>\n<html lang="de"><head><meta charset="utf-8">' +
+      `<meta http-equiv="Content-Security-Policy" content="${esc(csp)}">` +
+      '<meta name="referrer" content="no-referrer">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      `<title>${esc(guide.title)}</title><style>${css}</style></head><body>` +
+      guideBody(guide, steps, imgs, { logoSrc: await logoDataUrl(guide), cover: opts.cover, footer: settings.footer }) +
+      `<script>${js}</script></body></html>\n`;
+    return new Blob([doc], { type: 'text/html;charset=utf-8' });
+  }
+
+  // ---------- Odoo Wissen ----------
+
+  const ODOO_IMG = { crop: true, maxWidth: 1000, type: 'image/webp', quality: 0.8 };
+
+  async function odoo(guideId, opts, onProgress) {
+    const { guide, steps } = await load(guideId);
+    const imgs = await renderImages(steps, { ...ODOO_IMG, crop: opts.crop, marker: opts.marker }, 'dataurl', onProgress);
+    const numbered = number(steps);
+    let h = `<h2>${esc(guide.title)}</h2>`;
+    let t = `${guide.title}\n\n`;
+    if (guide.intro) {
+      h += `<p>${esc(guide.intro)}</p>`;
+      t += `${guide.intro}\n\n`;
+    }
+    let open = false;
+    for (const s of numbered) {
+      if (s.type === 'section') {
+        if (open) { h += '</ol>'; open = false; }
+        h += `<h3>${esc(s.text)}</h3>${s.note ? `<p>${esc(s.note)}</p>` : ''}`;
+        t += `\n${s.text}\n${s.note ? s.note + '\n' : ''}\n`;
+        continue;
+      }
+      if (!open) { h += `<ol start="${s.n}">`; open = true; }
+      const img = imgs.get(s.id);
+      h += `<li><p><strong>${esc(s.text)}</strong></p>`;
+      if (img) h += `<p><img src="${esc(img.src)}" alt="Schritt ${s.n}" width="${Math.min(800, img.width)}"></p>`;
+      if (s.note) h += `<blockquote><p>${esc(s.note)}</p></blockquote>`;
+      h += '</li>';
+      t += `${s.n}. ${s.text}\n${s.note ? `   Hinweis: ${s.note}\n` : ''}`;
+    }
+    if (open) h += '</ol>';
+    const bytes = new TextEncoder().encode(h).length;
+    return { html: h, text: t.trim() + '\n', bytes };
+  }
+
+  /** Kopiert HTML + Text. Fallback: Inhalt markieren und execCommand('copy'). */
+  async function copyToClipboard(htmlStr, text) {
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([htmlStr], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]);
+        return true;
+      }
+    } catch (_) { /* Fallback unten */ }
+    const holder = document.createElement('div');
+    holder.setAttribute('contenteditable', 'true');
+    Object.assign(holder.style, { position: 'fixed', left: '-10000px', top: '0', width: '800px' });
+    // Nur eigenes, vollständig escaptes HTML. DOMParser führt keine Skripte aus.
+    const parsed = new DOMParser().parseFromString(htmlStr, 'text/html');
+    holder.append(...Array.from(parsed.body.childNodes).map((n) => document.importNode(n, true)));
+    document.body.appendChild(holder);
+    const range = document.createRange();
+    range.selectNodeContents(holder);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    sel.removeAllRanges();
+    holder.remove();
+    return ok;
+  }
+
+  // ---------- Markdown ----------
+
+  function mdEscape(s) {
+    return String(s ?? '').replace(/[\\`*_[\]<>|#]/g, '\\$&').replace(/^([-+]|\d+\.)\s/, (m) => '\\' + m);
+  }
+
+  function mdBlock(s) {
+    return String(s ?? '').split('\n').map(mdEscape).join('  \n');
+  }
+
+  async function markdown(guideId, opts, onProgress) {
+    const { guide, steps } = await load(guideId);
+    const imgs = await renderImages(steps, { marker: opts.marker, crop: opts.crop, type: 'image/png' }, 'blob', onProgress);
+    const numbered = number(steps);
+    const files = [];
+    let md = `# ${mdEscape(guide.title)}\n\n`;
+    if (guide.intro) md += `${mdBlock(guide.intro)}\n\n`;
+    for (const s of numbered) {
+      if (s.type === 'section') {
+        md += `## ${mdEscape(s.text)}\n\n${s.note ? mdBlock(s.note) + '\n\n' : ''}`;
+        continue;
+      }
+      md += `### ${s.n}. ${mdEscape(s.text)}\n\n`;
+      const img = imgs.get(s.id);
+      if (img) {
+        const name = `bilder/schritt-${String(s.n).padStart(2, '0')}.png`;
+        files.push({ name, data: img.blob });
+        md += `![Schritt ${s.n}](${name})\n\n`;
+      }
+      if (s.note) md += `> ${mdBlock(s.note).split('\n').join('\n> ')}\n\n`;
+    }
+    files.unshift({ name: 'anleitung.md', data: md, compress: true });
+    return Zip.create(files);
+  }
+
+  // ---------- Projektsicherung ----------
+
+  async function backup(guideId) {
+    const { guide, steps } = await load(guideId);
+    const man = Project.manifest(guide, steps);
+    const files = [{ name: Project.MANIFEST, data: JSON.stringify(man, null, 2), compress: true }];
+    let i = 0;
+    for (const s of steps) {
+      if (s.type === 'section') continue;
+      const entry = man.steps.filter((x) => x.type !== 'section')[i++];
+      files.push({ name: entry.image, data: s.image });
+    }
+    if (guide.logo) files.push({ name: 'logo.png', data: guide.logo });
+    return Zip.create(files);
+  }
+
+  const MAX_MANIFEST = 10 * 1024 * 1024;
+
+  async function decodeImage(bytes) {
+    // Neu kodieren: nur Pixel werden übernommen, nichts anderes aus der Datei.
+    const r = await Render.reencode(new Blob([bytes]), { type: 'image/png' });
+    return r;
+  }
+
+  /** Liest eine Projektsicherung ein und legt eine neue Anleitung an. Liefert die neue ID. */
+  async function importProject(file, onProgress) {
+    if (!(file instanceof Blob)) throw new Error('Keine Datei');
+    const entries = await Zip.read(file);
+    const manEntry = entries.get(Project.MANIFEST);
+    if (!manEntry) throw new Error('Keine Projektsicherung des Workflow Recorders');
+    if (manEntry.size > MAX_MANIFEST) throw new Error('Projektbeschreibung ist zu groß');
+    let raw;
+    try {
+      raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await manEntry.read()));
+    } catch (_) {
+      throw new Error('Projektbeschreibung ist beschädigt');
+    }
+    const { guide: g, steps } = Project.validate(raw);
+
+    // Erst alles prüfen und dekodieren, dann speichern: keine halben Importe.
+    const prepared = [];
+    let done = 0;
+    for (const s of steps) {
+      if (s.type === 'section') { prepared.push(s); continue; }
+      const e = entries.get(s.image);
+      if (!e) throw new Error(`Bild fehlt: ${s.image}`);
+      let img;
+      try { img = await decodeImage(await e.read()); } catch (_) { throw new Error(`Bild ist ungültig: ${s.image}`); }
+      // Maße aus dem echten Bild, Verhältnis zum Viewport beibehalten.
+      const kx = img.width / s.imgW;
+      const ky = img.height / s.imgH;
+      const annotations = s.annotations.map((a) => ({ ...a, x1: a.x1 * kx, y1: a.y1 * ky, x2: a.x2 * kx, y2: a.y2 * ky }));
+      prepared.push({ ...s, image: img.blob, imgW: img.width, imgH: img.height, annotations });
+      if (onProgress) onProgress(++done);
+    }
+    let logo = null;
+    if (g.logo && entries.has('logo.png')) {
+      try {
+        logo = (await Render.reencode(new Blob([await entries.get('logo.png').read()]), { maxWidth: 800 })).blob;
+      } catch (_) { logo = null; }
+    }
+
+    const guide = await DB.addGuide({ title: g.title, intro: g.intro, logo });
+    try {
+      let order = 0;
+      for (const s of prepared) {
+        await DB.addStep({ ...s, guideId: guide.id, order: ++order, type: s.type });
+      }
+    } catch (e) {
+      await DB.deleteGuide(guide.id).catch(() => {});
+      throw e;
+    }
+    return guide.id;
+  }
+
+  return { load, number, stepCount, minutes, renderImages, guideBody, html, odoo, copyToClipboard, markdown, backup, importProject, mdEscape };
+})();

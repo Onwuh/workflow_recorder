@@ -1,0 +1,82 @@
+/* Vorlage der geteilten Anleitung (Kundensicht). Wird für Vorschau, PDF und HTML-Export genutzt.
+   Nur Systemschriften, keine externen Ressourcen. */
+:root {
+  --g-fg: #1B1D1F; --g-fg2: #3A3D41; --g-muted: #6B6E72; --g-line: #DCDCD6; --g-soft: #ECECE7;
+  --g-accent: #2B59C3; --g-tip-bg: #EEF2FB; --g-tip-fg: #1E3A7A;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: #FFFFFF; color: var(--g-fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--g-accent); }
+.g-top { border-bottom: 1px solid var(--g-soft); }
+.g-top-in {
+  max-width: 1040px; margin: 0 auto; padding: 20px 24px; display: flex; flex-wrap: wrap; gap: 12px;
+  justify-content: space-between; align-items: center; min-height: 76px;
+}
+.g-logo img { display: block; max-height: 40px; max-width: 220px; }
+.g-print {
+  font: inherit; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; color: var(--g-accent);
+  background: transparent; border: 0; cursor: pointer; padding: 8px 4px; min-height: 44px;
+}
+.g-print:hover { text-decoration: underline; }
+.g-main {
+  max-width: 1040px; margin: 0 auto; padding: 40px 24px 64px; display: flex; flex-wrap: wrap; gap: 48px;
+}
+.g-toc { flex: 1 1 200px; max-width: 240px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; align-self: flex-start; position: sticky; top: 16px; }
+.g-toc-h { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--g-muted); margin-bottom: 8px; }
+.g-toc a { display: flex; gap: 10px; padding: 7px 0; text-decoration: none; color: var(--g-fg2); line-height: 1.35; }
+.g-toc a:hover { color: var(--g-accent); }
+.g-toc .n { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--g-muted); flex: none; }
+.g-toc .sec { font-weight: 600; color: var(--g-fg); padding-top: 12px; }
+.g-art { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 40px; }
+.g-head { display: flex; flex-direction: column; gap: 12px; }
+.g-head h1 { margin: 0; font-size: 36px; line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; }
+.g-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--g-muted); }
+.g-intro { margin: 8px 0 0; font-size: 16px; line-height: 1.6; color: var(--g-fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.g-step { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 16px; }
+.g-step-h { display: flex; gap: 14px; align-items: center; }
+.g-num {
+  flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--g-fg); color: #FFFFFF;
+  font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+.g-step h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.g-img { border: 1px solid var(--g-line); border-radius: 8px; overflow: hidden; background: #FAFAF8; }
+.g-img img { display: block; width: 100%; height: auto; }
+.g-tip {
+  margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--g-tip-bg); font-size: 14px; line-height: 1.5;
+  color: var(--g-tip-fg); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.g-sec { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; border-top: 1px solid var(--g-soft); scroll-margin-top: 16px; }
+.g-sec h2 { margin: 16px 0 0; font-size: 22px; font-weight: 700; overflow-wrap: anywhere; }
+.g-sec p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--g-fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.g-foot { padding-top: 24px; border-top: 1px solid var(--g-soft); font-size: 12px; color: var(--g-muted); }
+.g-cover { display: none; }
+
+@media (max-width: 720px) {
+  .g-toc { position: static; max-width: none; }
+  .g-head h1 { font-size: 28px; }
+  .g-main { gap: 32px; padding-top: 24px; }
+}
+
+@media print {
+  @page { margin: 16mm 14mm; }
+  .g-print, .g-toc { display: none !important; }
+  .g-top { border: 0; }
+  .g-main { padding: 0; display: block; max-width: none; }
+  .g-art { gap: 24px; }
+  .g-step, .g-sec { break-inside: avoid; page-break-inside: avoid; }
+  .g-img img { max-height: 150mm; width: auto; max-width: 100%; margin: 0 auto; }
+  .g-cover {
+    display: flex; flex-direction: column; justify-content: center; gap: 24px; min-height: 240mm;
+    break-after: page; page-break-after: always;
+  }
+  .g-cover img { max-height: 30mm; max-width: 90mm; align-self: flex-start; }
+  .g-cover h1 { margin: 0; font-size: 34px; line-height: 1.15; }
+  .g-cover .g-meta { font-size: 14px; }
+  .has-cover .g-top, .has-cover .g-head h1 { display: none; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

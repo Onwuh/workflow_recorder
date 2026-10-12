@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Recorder</title>
+<link rel="stylesheet" href="../ui.css">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="popup">
+
+  <!-- Bereit -->
+  <section id="view-ready" class="view" hidden>
+    <header class="head">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="#1B1D1F"></rect><circle cx="12" cy="12" r="4" fill="#2B59C3"></circle></svg>
+        <span>Workflow Recorder</span>
+      </div>
+      <button id="btn-settings" class="btn-icon" type="button" aria-label="Einstellungen" title="Einstellungen">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+      </button>
+    </header>
+
+    <div class="start">
+      <button id="btn-start" class="btn-rec" type="button">
+        <span class="dot" aria-hidden="true"></span>
+        Aufnahme starten
+      </button>
+      <div id="perm" class="warn" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        <span>Die Erweiterung braucht Zugriff auf Webseiten, um Screenshots aufzunehmen. <button id="btn-perm" class="btn-link inline" type="button">Zugriff erlauben</button></span>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div class="opts">
+        <label class="check"><input id="opt-redact" type="checkbox"> Eingaben automatisch schwärzen</label>
+        <label class="check"><input id="opt-keys" type="checkbox"> Auch Tastatureingaben als Schritt</label>
+      </div>
+    </div>
+
+    <div class="recent-head">
+      <span class="eyebrow">Zuletzt</span>
+      <a id="link-all" href="../editor/editor.html" target="_blank">Alle anzeigen</a>
+    </div>
+    <div id="recent" class="recent"></div>
+
+    <footer class="foot">
+      <span>Kurzbefehl</span>
+      <span id="shortcut" class="mono kbd">⌥ ⇧ R</span>
+    </footer>
+  </section>
+
+  <!-- Aufnahme -->
+  <section id="view-rec" class="view" hidden>
+    <div class="rec-head">
+      <div class="rec-row">
+        <span class="rec-label"><span id="rec-dot" class="rec-dot" aria-hidden="true"></span><span id="rec-status">AUFNAHME</span></span>
+        <span id="rec-time" class="mono rec-time">00:00</span>
+      </div>
+      <div class="rec-count">
+        <span id="rec-count" class="big">0</span>
+        <span id="rec-count-label">Schritte erfasst</span>
+      </div>
+      <div class="rec-actions">
+        <button id="btn-pause" class="btn-ghost" type="button">
+          <svg id="ico-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
+          <svg id="ico-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden><path d="M7 4l13 8-13 8z"></path></svg>
+          <span id="pause-label">Pause</span>
+        </button>
+        <button id="btn-stop" class="btn-light" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>Fertig
+        </button>
+      </div>
+    </div>
+
+    <div class="last-head">
+      <span class="eyebrow">Letzte Schritte</span>
+      <button id="btn-discard" class="btn-link" type="button">Letzten verwerfen</button>
+    </div>
+    <div id="last" class="last"></div>
+
+    <footer class="foot">
+      <span>Tab: <span id="rec-host" class="host"></span></span>
+    </footer>
+  </section>
+
+</div>
+<script src="../db.js"></script>
+<script src="../settings.js"></script>
+<script src="../lib/util.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

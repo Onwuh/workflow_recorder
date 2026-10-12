@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Einstellungen – Workflow Recorder</title>
+<link rel="stylesheet" href="../ui.css">
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main class="opt">
+  <header class="opt-head">
+    <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="#1B1D1F"></rect><circle cx="12" cy="12" r="4" fill="#2B59C3"></circle></svg>
+    <h1>Einstellungen</h1>
+  </header>
+
+  <section class="card" id="perm-card" hidden>
+    <h2>Zugriff auf Webseiten</h2>
+    <p>Ohne diesen Zugriff kann die Erweiterung keine Screenshots aufnehmen. In Firefox muss er nach der Installation einmal erteilt werden.</p>
+    <div><button id="perm-btn" class="btn btn-primary" type="button">Zugriff erlauben</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Aufnahme</h2>
+    <label class="check"><input id="autoRedact" type="checkbox"> Eingaben automatisch schwärzen</label>
+    <label class="check"><input id="keySteps" type="checkbox"> Auch Tastatureingaben als Schritt</label>
+  </section>
+
+  <section class="card">
+    <h2>Automatisch geschwärzte Felder</h2>
+    <p>Technische Feldnamen aus Odoo (Attribut <code>name</code> der Feld-Widgets und Listenspalten), einer pro Zeile. E-Mail-, Telefon- und Passwortfelder werden auf allen Seiten immer geschwärzt.</p>
+    <textarea id="fields" class="textarea mono" rows="12" spellcheck="false" aria-label="Feldnamen, einer pro Zeile"></textarea>
+    <p id="fields-msg" class="msg" role="status"></p>
+    <div class="row">
+      <button id="fields-save" class="btn btn-primary" type="button">Feldliste speichern</button>
+      <button id="fields-reset" class="btn" type="button">Standardliste wiederherstellen</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Export</h2>
+    <label class="field">Fußzeile in Anleitungen (z. B. „Erstellt von Name · Firma“)
+      <input id="footer" class="input" type="text" maxlength="200">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Kurzbefehl</h2>
+    <p>Aufnahme starten und beenden: <span id="shortcut" class="mono"></span>. Ändern lässt er sich in den Tastenkürzel-Einstellungen des Browsers.</p>
+  </section>
+
+  <section class="card">
+    <h2>Datenschutz</h2>
+    <p>Alle Anleitungen und Screenshots bleiben in diesem Browser. Die Erweiterung sendet nichts an Server, nutzt keine Cloud-KI und lädt keine fremden Ressourcen.</p>
+  </section>
+</main>
+<script src="../settings.js"></script>
+<script src="../lib/util.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

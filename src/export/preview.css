@@ -1,0 +1,10 @@
+.p-loading { padding: 40px 24px; font-size: 15px; color: #6B6E72; text-align: center; }
+.p-bar {
+  position: sticky; top: 0; z-index: 5; background: #1B1D1F; color: #FFFFFF; font-size: 13px;
+  padding: 10px 24px; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap;
+}
+.p-bar button {
+  font: inherit; height: 32px; padding: 0 14px; border-radius: 7px; border: 0; background: #FFFFFF; color: #1B1D1F;
+  font-weight: 600; cursor: pointer;
+}
+@media print { .p-bar, .p-loading { display: none !important; } }

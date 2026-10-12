@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><title>Angebot S00042 – Beispielkunde GmbH</title>
+<style>
+body { font-family: sans-serif; margin: 0; }
+.o_main_navbar { background: #714B67; height: 46px; display: flex; align-items: center; gap: 12px; padding: 0 12px; }
+.o_main_navbar a { color: #fff; }
+.o_control_panel { padding: 12px; display: flex; gap: 8px; align-items: center; }
+.o_form_sheet { padding: 24px; display: grid; grid-template-columns: 160px 300px; gap: 16px 12px; }
+input { width: 280px; height: 28px; }
+table { border-collapse: collapse; margin: 24px; }
+td, th { border: 1px solid #ccc; padding: 6px 10px; }
+</style></head>
+<body>
+<nav class="o_main_navbar">
+  <div class="o_menu_sections"><a href="#" class="dropdown-toggle" id="menu-orders">Aufträge</a></div>
+</nav>
+<div class="o_control_panel">
+  <ol class="breadcrumb"><li class="breadcrumb-item"><a href="#" id="bc">Angebote</a></li><li class="o_last_breadcrumb_item">S00042</li></ol>
+  <button class="btn btn-primary" id="confirm" type="button">Bestätigen</button>
+  <button class="btn" id="iconbtn" type="button" aria-label="Aktion"><span>⚙</span></button>
+  <div class="nav nav-tabs"><a href="#" role="tab" id="tab">Auftragszeilen</a></div>
+</div>
+<div class="o_form_sheet">
+  <div class="o_cell"><label class="o_form_label" for="partner_id_0">Kunde<sup>?</sup></label></div>
+  <div class="o_cell"><div name="partner_id" class="o_field_widget o_field_many2one"><input id="partner_id_0" value="Beispielkunde GmbH" role="combobox"></div></div>
+  <div class="o_cell"><label class="o_form_label" for="qty_0">Menge</label></div>
+  <div class="o_cell"><div name="product_uom_qty" class="o_field_widget"><input id="qty_0" value="5"></div></div>
+  <div class="o_cell"><label class="o_form_label" for="email_0">E-Mail</label></div>
+  <div class="o_cell"><div name="email" class="o_field_widget"><input id="email_0" type="email" value="kunde@example.invalid"></div></div>
+  <div class="o_cell"><label class="o_form_label" for="ref_0">Referenz</label></div>
+  <div class="o_cell"><div name="client_order_ref" class="o_field_widget"><input id="ref_0" value="GEHEIM-123"></div></div>
+</div>
+<table class="o_list_table">
+  <thead><tr><th data-name="partner_id">Kunde</th><th data-name="amount">Betrag</th></tr></thead>
+  <tbody><tr class="o_data_row"><td name="partner_id" id="rowcell">Beispielkunde GmbH</td><td name="amount">100,00</td></tr></tbody>
+</table>
+</body>
+</html>

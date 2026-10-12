@@ -1,0 +1,103 @@
+/* Gemeinsame Tokens und Grundbausteine, siehe docs/design/README.md.
+   Bewusst nur Systemschriften: die Erweiterung lädt nichts von fremden Servern. */
+:root {
+  --bg: #F6F6F3;
+  --surface: #FFFFFF;
+  --fg: #1B1D1F;
+  --fg-2: #3A3D41;
+  --muted: #6B6E72;
+  --line: #DCDCD6;
+  --line-soft: #ECECE7;
+  --line-input: #CFD0CB;
+  --accent: #2B59C3;
+  --accent-hover: #1E4296;
+  --accent-soft: #EEF2FB;
+  --rec: #C8372D;
+  --danger: #A12A21;
+  --danger-line: #E8C4C0;
+  --warn-bg: #FFF4E5;
+  --warn-fg: #6A3F00;
+  --ok: #1D7A46;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; }
+body {
+  font-family: var(--sans);
+  color: var(--fg);
+  background: var(--surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+[hidden] { display: none !important; }
+
+.mono { font-family: var(--mono); }
+
+.eyebrow {
+  font-size: 12px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.btn {
+  height: 40px; padding: 0 16px; border-radius: 8px;
+  border: 1px solid var(--line-input); background: var(--surface);
+  font-size: 14px; color: var(--fg);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { background: #FAFAF8; }
+.btn-primary { border: 0; background: var(--accent); color: #FFFFFF; font-weight: 600; padding: 0 18px; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-danger { border-color: var(--danger-line); color: var(--danger); }
+.btn-link {
+  border: 0; background: transparent; color: var(--accent);
+  min-height: 32px; padding: 0 4px; font-size: 13px;
+}
+.btn-link:hover:not(:disabled) { color: var(--accent-hover); text-decoration: underline; }
+.btn-icon {
+  width: 36px; height: 36px; border: 0; background: transparent; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; color: #5C5F63;
+}
+.btn-icon:hover { background: var(--line-soft); }
+
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+.input, .textarea {
+  border: 1px solid var(--line-input); border-radius: 8px; background: var(--surface);
+  color: var(--fg); font-size: 14px;
+}
+.input { height: 40px; padding: 0 12px; }
+.textarea { padding: 10px; resize: vertical; line-height: 1.45; }
+
+.check { display: flex; align-items: center; gap: 10px; min-height: 28px; font-size: 13px; color: var(--fg-2); }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; flex: none; }
+
+.warn {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px;
+  background: var(--warn-bg); color: var(--warn-fg); font-size: 12px; line-height: 1.45;
+}
+.warn svg { flex: none; margin-top: 1px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--fg); color: #FFFFFF; padding: 10px 16px; border-radius: 8px;
+  font-size: 14px; z-index: 1000; max-width: calc(100vw - 32px);
+  box-shadow: 0 6px 24px rgba(0,0,0,.18);
+}
+.toast.error { background: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
