@@ -10,10 +10,10 @@ const browser = {
   TextEncoder: 'readonly', TextDecoder: 'readonly', DataView: 'readonly',
   CompressionStream: 'readonly', DecompressionStream: 'readonly', createImageBitmap: 'readonly',
   indexedDB: 'readonly', Element: 'readonly', MutationObserver: 'readonly', DOMParser: 'readonly',
-  ClipboardItem: 'readonly', CSS: 'readonly', confirm: 'readonly', importScripts: 'readonly',
+  ClipboardItem: 'readonly', CSS: 'readonly', confirm: 'readonly', localStorage: 'readonly', importScripts: 'readonly',
   globalThis: 'readonly', self: 'readonly', module: 'readonly', require: 'readonly'
 };
-const ext = { DB: 'readonly', Settings: 'readonly', U: 'readonly', Render: 'readonly', Zip: 'readonly', Project: 'readonly', Exporter: 'readonly', Editor: 'readonly' };
+const ext = { DB: 'readonly', Settings: 'readonly', U: 'readonly', Render: 'readonly', Zip: 'readonly', Project: 'readonly', Exporter: 'readonly', Editor: 'readonly', Pdf: 'readonly', browser: 'readonly' };
 
 module.exports = [
   {
@@ -37,7 +37,7 @@ module.exports = [
     // E2E läuft in Node und wertet Code in Erweiterungsseiten aus.
     files: ['tests/e2e/**/*.js'],
     languageOptions: {
-      globals: { __dirname: 'readonly', process: 'readonly', chrome: 'readonly', OffscreenCanvas: 'readonly', getComputedStyle: 'readonly' }
+      globals: { __dirname: 'readonly', process: 'readonly', chrome: 'readonly', OffscreenCanvas: 'readonly', getComputedStyle: 'readonly', PointerEvent: 'readonly', Buffer: 'readonly' }
     }
   }
 ];

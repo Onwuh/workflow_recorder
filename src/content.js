@@ -38,8 +38,16 @@
     }
   }
 
-  api.runtime.onMessage.addListener((msg, sender) => {
-    if (sender && sender.id === api.runtime.id) applyState(msg);
+  api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!sender || sender.id !== api.runtime.id || !msg) return false;
+    if (msg.type === 'measure') {
+      let r;
+      try { r = state.recording ? measure() : null; } catch (_) { r = null; }
+      sendResponse(r);
+      return false;
+    }
+    applyState(msg);
+    return false;
   });
 
   send({ type: 'hello' }).then(applyState);
@@ -282,6 +290,8 @@
   }
 
   // ---------- Auto-Schwärzung ----------
+  // Der Hintergrund fragt direkt vor und nach dem Screenshot die zu schwärzenden Flächen ab.
+  // Gespeichert werden Rechtecke; fest ins Bild gerechnet wird erst beim Export.
 
   function redactSelector() {
     const parts = ['input[type="email" i]', 'input[type="tel" i]', 'input[type="password" i]', 'input[autocomplete^="cc-"]'];
@@ -292,66 +302,74 @@
     return parts.join(',');
   }
 
+  // Ebenen, die über anderen Inhalten liegen können (Dialoge/Wizards, Menüs, Popover).
+  const OCCLUDERS = [
+    '.modal-content', '[role="dialog"]', '[role="alertdialog"]', '.o_dialog .modal-content',
+    '.dropdown-menu.show', '.o-dropdown--menu', '[role="menu"]', '[role="listbox"]',
+    '.popover', '.o_popover', '.o-autocomplete--dropdown-menu', '.ui-autocomplete', '.o_notification'
+  ].join(',');
+
   function isVisibleRect(r) {
     return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 &&
       r.top < window.innerHeight && r.left < window.innerWidth;
   }
 
-  /** Deckende Boxen über passende Elemente. Läuft pro Frame neu, bis es entfernt wird. */
-  function showOverlay() {
-    const host = document.createElement('wfr-redaction');
-    const hs = host.style;
-    for (const [k, v] of [['all', 'initial'], ['position', 'fixed'], ['inset', '0'], ['z-index', '2147483647'],
-      ['pointer-events', 'none'], ['display', 'block'], ['contain', 'strict']]) {
-      hs.setProperty(k, v, 'important');
-    }
-    const root = host.attachShadow({ mode: 'closed' });
-    const layer = document.createElement('div');
-    root.appendChild(layer);
-    (document.documentElement || document.body).appendChild(host);
+  function intersect(a, b) {
+    const x = Math.max(a.x, b.x);
+    const y = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.w, b.x + b.w);
+    const y2 = Math.min(a.y + a.h, b.y + b.h);
+    return x2 > x && y2 > y ? { x, y, w: x2 - x, h: y2 - y } : null;
+  }
 
-    const sel = redactSelector();
-    let covered = [];
-    let raf = 0;
-    let alive = true;
+  /** Rechteck a ohne Loch b, als bis zu vier Teilrechtecke. */
+  function subtract(a, b) {
+    const i = intersect(a, b);
+    if (!i) return [a];
+    const out = [];
+    if (i.y > a.y) out.push({ x: a.x, y: a.y, w: a.w, h: i.y - a.y });
+    if (i.y + i.h < a.y + a.h) out.push({ x: a.x, y: i.y + i.h, w: a.w, h: a.y + a.h - i.y - i.h });
+    if (i.x > a.x) out.push({ x: a.x, y: i.y, w: i.x - a.x, h: i.h });
+    if (i.x + i.w < a.x + a.w) out.push({ x: i.x + i.w, y: i.y, w: a.x + a.w - i.x - i.w, h: i.h });
+    return out.filter((r) => r.w >= 1 && r.h >= 1);
+  }
 
-    function draw() {
-      if (!alive) return;
-      covered = Array.from(document.querySelectorAll(sel));
-      const frag = document.createDocumentFragment();
-      for (const el of covered) {
-        const r = el.getBoundingClientRect();
-        if (!isVisibleRect(r)) continue;
-        const b = document.createElement('div');
-        const s = b.style;
-        s.position = 'fixed';
-        s.left = (r.left - 2) + 'px';
-        s.top = (r.top - 2) + 'px';
-        s.width = (r.width + 4) + 'px';
-        s.height = (r.height + 4) + 'px';
-        s.background = '#1B1D1F';
-        s.borderRadius = '3px';
-        frag.appendChild(b);
+  const box = (r) => ({ x: r.left, y: r.top, w: r.width, h: r.height });
+
+  /** Liegt die Ebene an diesem Punkt über dem Element? */
+  function coversAt(occ, el, area) {
+    const hit = document.elementFromPoint(area.x + area.w / 2, area.y + area.h / 2);
+    return !!hit && occ.contains(hit) && !el.contains(hit);
+  }
+
+  /**
+   * Flächen (CSS-Pixel im Viewport), die geschwärzt werden müssen, und die Zahl ausgefüllter,
+   * nicht geschwärzter Felder. Teile, die ein darüberliegender Dialog verdeckt, werden ausgespart,
+   * damit Balken nicht über Wizards liegen.
+   */
+  function measure() {
+    const view = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    const covered = state.autoRedact ? Array.from(document.querySelectorAll(redactSelector())) : [];
+    const occluders = Array.from(document.querySelectorAll(OCCLUDERS))
+      .map((o) => ({ el: o, r: box(o.getBoundingClientRect()) }))
+      .filter((o) => o.r.w > 0 && o.r.h > 0);
+    const rects = [];
+    for (const el of covered) {
+      const r = el.getBoundingClientRect();
+      if (!isVisibleRect(r)) continue;
+      // 2 px größer als das Feld (Gestaltungsregel).
+      let parts = [intersect({ x: r.left - 2, y: r.top - 2, w: r.width + 4, h: r.height + 4 }, view)].filter(Boolean);
+      for (const o of occluders) {
+        if (o.el.contains(el) || el.contains(o.el)) continue;
+        parts = parts.flatMap((p) => {
+          const i = intersect(p, o.r);
+          return i && coversAt(o.el, el, i) ? subtract(p, o.r) : [p];
+        });
       }
-      layer.replaceChildren(frag);
-      raf = requestAnimationFrame(draw);
+      rects.push(...parts);
+      if (rects.length > 400) break;
     }
-    draw();
-    // Falls die Seite den Host entfernt, sofort wieder einhängen.
-    const mo = new MutationObserver(() => {
-      if (alive && !host.isConnected) (document.documentElement || document.body).appendChild(host);
-    });
-    mo.observe(document.documentElement, { childList: true });
-
-    return {
-      get covered() { return covered; },
-      remove() {
-        alive = false;
-        cancelAnimationFrame(raf);
-        mo.disconnect();
-        host.remove();
-      }
-    };
+    return { rects: rects.slice(0, 400), unredacted: countUnredacted(covered) };
   }
 
   /** Zählt sichtbare, ausgefüllte Eingabefelder, die nicht geschwärzt sind. Werte werden nicht übertragen. */
@@ -370,23 +388,11 @@
     return n;
   }
 
-  function nextFrames() {
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = () => { if (!done) { done = true; resolve(); } };
-      requestAnimationFrame(() => requestAnimationFrame(finish));
-      setTimeout(finish, 150); // Hintergrund-Tabs liefern keine Frames.
-    });
-  }
-
   // ---------- Schritt aufnehmen ----------
 
   async function record(info, x, y) {
     busy = true;
-    const overlay = state.autoRedact ? showOverlay() : null;
     try {
-      await nextFrames();
-      const unredacted = countUnredacted(overlay ? overlay.covered : []);
       await send({
         type: 'step',
         step: {
@@ -395,12 +401,10 @@
           x, y,
           vw: window.innerWidth,
           vh: window.innerHeight,
-          dpr: window.devicePixelRatio || 1,
-          unredacted
+          dpr: window.devicePixelRatio || 1
         }
       });
     } finally {
-      if (overlay) overlay.remove();
       busy = false;
     }
   }

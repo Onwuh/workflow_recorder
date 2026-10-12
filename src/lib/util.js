@@ -144,5 +144,29 @@ var U = (() => {
     return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   }
 
-  return { api, el, icon, relDay, relTime, dateDE, stepsLabel, escapeHtml, safeFilename, blobToDataUrl, download, toast, send, intParam, isMac, pad2 };
+  /**
+   * Vorschaubild eines Schritts mit Schwärzungen (und optional Klickmarker) als Ebenen in Prozent.
+   * urls: Array, in das die erzeugte Object-URL zum späteren Freigeben gelegt wird.
+   */
+  function thumb(step, cls, urls, { marker = true } = {}) {
+    const box = el('div', { class: cls + ' thumb-box' });
+    if (!step || !step.image) return box;
+    const url = URL.createObjectURL(step.image);
+    urls.push(url);
+    box.appendChild(el('img', { src: url, alt: '' }));
+    const W = step.imgW || 1;
+    const H = step.imgH || 1;
+    for (const q of step.redactions || []) {
+      box.appendChild(el('span', {
+        class: 'thumb-rd',
+        style: { left: `${(q.x / W) * 100}%`, top: `${(q.y / H) * 100}%`, width: `${(q.w / W) * 100}%`, height: `${(q.h / H) * 100}%` }
+      }));
+    }
+    if (marker && step.showMarker !== false && step.vw && step.vh) {
+      box.appendChild(el('span', { class: 'thumb-mk', style: { left: `${(step.x / step.vw) * 100}%`, top: `${(step.y / step.vh) * 100}%` } }));
+    }
+    return box;
+  }
+
+  return { api, el, icon, thumb, relDay, relTime, dateDE, stepsLabel, escapeHtml, safeFilename, blobToDataUrl, download, toast, send, intParam, isMac, pad2 };
 })();

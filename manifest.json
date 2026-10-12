@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Workflow Recorder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zeichnet Klick-Abläufe auf und exportiert sie als Schritt-für-Schritt-Anleitung. Alles bleibt lokal.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -18,12 +18,10 @@
     }
   },
   "background": {
-    "service_worker": "src/background.js",
-    "scripts": [
-      "src/db.js",
-      "src/settings.js",
-      "src/background.js"
-    ]
+    "service_worker": "src/background.js"
+  },
+  "side_panel": {
+    "default_path": "src/sidebar/sidebar.html"
   },
   "content_scripts": [
     {
@@ -46,7 +44,8 @@
     "storage",
     "tabs",
     "scripting",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -61,16 +60,5 @@
   },
   "content_security_policy": {
     "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-  },
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "workflow-recorder@local",
-      "strict_min_version": "121.0",
-      "data_collection_permissions": {
-        "required": [
-          "none"
-        ]
-      }
-    }
   }
 }

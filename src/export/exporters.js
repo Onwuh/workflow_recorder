@@ -122,9 +122,40 @@ var Exporter = (() => {
     return new Blob([doc], { type: 'text/html;charset=utf-8' });
   }
 
+  // ---------- PDF ----------
+
+  async function pdf(guideId, opts, onProgress) {
+    const { guide, steps } = await load(guideId);
+    const settings = await Settings.get();
+    const imgs = await renderImages(steps, { marker: opts.marker, crop: opts.crop, maxWidth: 1600, type: 'image/jpeg', quality: 0.88 }, 'blob', onProgress);
+    const bytes = async (b) => new Uint8Array(await b.arrayBuffer());
+    const items = [];
+    for (const s of number(steps)) {
+      if (s.type === 'section') { items.push({ type: 'section', text: s.text || '', note: s.note || '' }); continue; }
+      const im = imgs.get(s.id);
+      // Nur echtes JPEG einbetten (DCTDecode); sonst ohne Bild statt kaputter Datei.
+      const img = im && im.blob.type === 'image/jpeg' ? { bytes: await bytes(im.blob), w: im.width, h: im.height } : null;
+      items.push({ type: 'step', n: s.n, text: s.text || '', note: s.note || '', img });
+    }
+    let cover = null;
+    if (opts.cover && guide.logo) {
+      const l = await Render.toJpeg(guide.logo, { maxWidth: 800 });
+      cover = { logo: { bytes: await bytes(l.blob), w: l.width, h: l.height } };
+    }
+    const count = stepCount(steps);
+    return Pdf.build({
+      title: guide.title || 'Anleitung',
+      meta: `${U.stepsLabel(count)}   ·   ca. ${minutes(count)} ${minutes(count) === 1 ? 'Minute' : 'Minuten'}   ·   Stand: ${U.dateDE(guide.updatedAt || Date.now())}`,
+      intro: guide.intro || '',
+      footer: settings.footer,
+      cover,
+      items
+    });
+  }
+
   // ---------- Odoo Wissen ----------
 
-  const ODOO_IMG = { crop: true, maxWidth: 1000, type: 'image/webp', quality: 0.8 };
+  const ODOO_IMG = { maxWidth: 1000, type: 'image/webp', quality: 0.85 };
 
   async function odoo(guideId, opts, onProgress) {
     const { guide, steps } = await load(guideId);
@@ -232,7 +263,11 @@ var Exporter = (() => {
     for (const s of steps) {
       if (s.type === 'section') continue;
       const entry = man.steps.filter((x) => x.type !== 'section')[i++];
-      files.push({ name: entry.image, data: s.image });
+      // Auch die Sicherung enthält nie ungeschwärzte Originale: Schwärzungen werden eingerechnet.
+      const data = (s.redactions || []).length
+        ? (await Render.renderStep(s, { marker: false, annotations: false, type: 'image/png' })).blob
+        : s.image;
+      files.push({ name: entry.image, data });
     }
     if (guide.logo) files.push({ name: 'logo.png', data: guide.logo });
     return Zip.create(files);
@@ -273,8 +308,11 @@ var Exporter = (() => {
       // Maße aus dem echten Bild, Verhältnis zum Viewport beibehalten.
       const kx = img.width / s.imgW;
       const ky = img.height / s.imgH;
-      const annotations = s.annotations.map((a) => ({ ...a, x1: a.x1 * kx, y1: a.y1 * ky, x2: a.x2 * kx, y2: a.y2 * ky }));
-      prepared.push({ ...s, image: img.blob, imgW: img.width, imgH: img.height, annotations });
+      const annotations = s.annotations.map((a) => (a.type !== 'arrow'
+        ? { ...a, x: a.x * kx, y: a.y * ky, ...(a.w != null ? { w: a.w * kx, h: a.h * ky } : {}) }
+        : { ...a, x1: a.x1 * kx, y1: a.y1 * ky, x2: a.x2 * kx, y2: a.y2 * ky }));
+      const redactions = s.redactions.map((q) => ({ ...q, x: q.x * kx, y: q.y * ky, w: q.w * kx, h: q.h * ky }));
+      prepared.push({ ...s, image: img.blob, imgW: img.width, imgH: img.height, annotations, redactions });
       if (onProgress) onProgress(++done);
     }
     let logo = null;
@@ -297,5 +335,5 @@ var Exporter = (() => {
     return guide.id;
   }
 
-  return { load, number, stepCount, minutes, renderImages, guideBody, html, odoo, copyToClipboard, markdown, backup, importProject, mdEscape };
+  return { load, number, stepCount, minutes, renderImages, guideBody, html, pdf, odoo, copyToClipboard, markdown, backup, importProject, mdEscape };
 })();

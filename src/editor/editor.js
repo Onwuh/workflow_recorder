@@ -29,14 +29,8 @@ var Editor = (() => {
     }
     const items = [];
     for (const g of guides) {
-      const thumb = el('div', { class: 'ov-thumb' });
       const steps = await DB.getSteps(g.id);
-      const first = steps.find((s) => s.image);
-      if (first) {
-        const u = URL.createObjectURL(first.image);
-        ovUrls.push(u);
-        thumb.appendChild(el('img', { src: u, alt: '' }));
-      }
+      const thumb = U.thumb(steps.find((s) => s.image), 'ov-thumb', ovUrls, { marker: false });
       const href = `editor.html?guide=${g.id}`;
       items.push(el('div', { class: 'ov-item' },
         thumb,
@@ -80,7 +74,13 @@ var Editor = (() => {
     undo: new Map(), // stepId -> [Schnappschuss], nur im Speicher
     drag: null,
     pendingCrop: null,
-    lastArrow: -1
+    selAnno: -1, // ausgewählte Annotation (Pfeil, Text, Form)
+    color: (() => {
+      try {
+        const c = localStorage.getItem('wfr-color');
+        return Render.COLORS.some((x) => x.hex === c) ? c : Render.DEFAULT_COLOR;
+      } catch (_) { return Render.DEFAULT_COLOR; }
+    })()
   };
 
   const current = () => S.steps[S.sel] || null;
@@ -158,7 +158,9 @@ var Editor = (() => {
     renderMeta();
     setInterval(renderMeta, 30000);
     renderList();
-    select(0);
+    const want = U.intParam('step');
+    const idx = want ? S.steps.findIndex((x) => x.id === want) : -1;
+    select(idx >= 0 ? idx : 0);
   }
 
   // ---- Schrittliste ----
@@ -196,8 +198,8 @@ var Editor = (() => {
     S.sel = Math.max(0, Math.min(S.steps.length - 1, i));
     setTool(null);
     cancelCrop();
-    S.lastArrow = -1;
-    $('ed-arrow-bar').hidden = true;
+    S.selAnno = -1;
+    $('ed-anno-bar').hidden = true;
     for (const b of $('ed-steps').children) {
       b.setAttribute('aria-selected', b.dataset.idx === String(S.sel) ? 'true' : 'false');
     }
@@ -253,7 +255,7 @@ var Editor = (() => {
     return n;
   }
 
-  /** Klickmarker, Pfeile und Auswahlrahmen als SVG in Bildpixeln. */
+  /** Klickmarker, Schwärzungen, Annotationen und Auswahl als SVG in Bildpixeln. */
   function drawOverlay() {
     const s = current();
     const svg = $('ed-svg');
@@ -263,34 +265,50 @@ var Editor = (() => {
     const k = Render.scaleOf(s);
     const nodes = [];
 
+    // Pfeilspitzen in jeder Farbe der Palette
     const defs = svgEl('defs', {});
-    const marker = svgEl('marker', { id: 'ah', viewBox: '0 0 10 10', refX: '8', refY: '5', markerWidth: '4', markerHeight: '4', orient: 'auto-start-reverse' });
-    marker.appendChild(svgEl('path', { d: 'M0 0L10 5L0 10z', fill: Render.REC }));
-    defs.appendChild(marker);
-    nodes.push(defs);
-
-    (s.annotations || []).forEach((a, i) => {
-      nodes.push(svgEl('line', {
-        x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, stroke: Render.REC, 'stroke-width': 4 * k,
-        'stroke-linecap': 'round', 'marker-end': 'url(#ah)', opacity: i === S.lastArrow ? 1 : 0.95
-      }));
-      if (a.text) {
-        const t = svgEl('text', {
-          x: a.x1, y: a.y1, fill: '#FFFFFF', 'font-size': 15 * k, 'font-weight': 600,
-          'font-family': 'system-ui, sans-serif', 'dominant-baseline': 'middle',
-          'text-anchor': a.x2 >= a.x1 ? 'end' : 'start', stroke: Render.REC, 'stroke-width': 8 * k,
-          'paint-order': 'stroke', 'stroke-linejoin': 'round'
-        });
-        t.textContent = a.text;
-        nodes.push(t);
-      }
+    Render.COLORS.forEach((c, i) => {
+      const m = svgEl('marker', { id: `ah${i}`, viewBox: '0 0 10 10', refX: '8', refY: '5', markerWidth: '4', markerHeight: '4', orient: 'auto-start-reverse' });
+      m.appendChild(svgEl('path', { d: 'M0 0L10 5L0 10z', fill: c.hex }));
+      defs.appendChild(m);
     });
+    nodes.push(defs);
+    const markerFor = (hex) => `url(#ah${Math.max(0, Render.COLORS.findIndex((c) => c.hex === hex))})`;
+
+    // Schwärzungen: im Editor als Flächen, im Schwärzungs-Modus anklickbar zum Entfernen.
+    for (const q of s.redactions || []) {
+      nodes.push(svgEl('rect', {
+        x: q.x, y: q.y, width: q.w, height: q.h, rx: 3 * k, fill: '#1B1D1F',
+        stroke: S.tool === 'redact' ? '#FF5A4E' : 'none', 'stroke-width': 2 * k,
+        'stroke-dasharray': `${6 * k} ${4 * k}`
+      }));
+    }
+
+    const list = (s.annotations || []).slice();
+    if (S.drag && S.drag.mode === 'new') list.push(S.drag.anno);
+    list.forEach((a) => nodes.push(...annoNodes(a, k, markerFor)));
 
     if (s.showMarker !== false) {
       const { cx, cy } = Render.markerPos(s);
       nodes.push(svgEl('circle', {
         cx, cy, r: 22 * k - 1.5 * k, fill: 'rgba(200,55,45,0.12)', stroke: Render.REC, 'stroke-width': 3 * k
       }));
+    }
+
+    // Auswahl mit Griffen
+    const selA = selected();
+    if (selA && ANNO_TOOLS.has(S.tool)) {
+      const bb = annoBox(selA, k);
+      nodes.push(svgEl('rect', {
+        x: bb.x - 4 * k, y: bb.y - 4 * k, width: bb.w + 8 * k, height: bb.h + 8 * k, fill: 'none',
+        stroke: '#2B59C3', 'stroke-width': 1.5 * k, 'stroke-dasharray': `${5 * k} ${3 * k}`
+      }));
+      for (const h of handles(selA)) {
+        nodes.push(svgEl('rect', {
+          x: h.x - 6 * k, y: h.y - 6 * k, width: 12 * k, height: 12 * k, rx: 2 * k,
+          fill: '#FFFFFF', stroke: '#2B59C3', 'stroke-width': 2 * k
+        }));
+      }
     }
 
     const r = S.drag && S.drag.rect ? S.drag.rect : S.pendingCrop;
@@ -307,23 +325,149 @@ var Editor = (() => {
         nodes.push(svgEl('rect', { x: rr.x, y: rr.y, width: rr.w, height: rr.h, fill: 'none', stroke: '#FFFFFF', 'stroke-width': 2 * k, 'stroke-dasharray': `${6 * k} ${4 * k}` }));
       }
     }
-    if (S.drag && S.drag.arrow) {
-      const a = S.drag.arrow;
-      nodes.push(svgEl('line', { x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, stroke: Render.REC, 'stroke-width': 4 * k, 'stroke-linecap': 'round', 'marker-end': 'url(#ah)' }));
-    }
     svg.replaceChildren(...nodes);
+  }
+
+  /** SVG-Knoten einer Annotation, optisch gleich wie im Export (Render). */
+  function annoNodes(a, k, markerFor) {
+    const col = Render.colorOf(a);
+    if (a.type === 'text') {
+      if (!a.text) return [];
+      const b = Render.textBox(a.text, k);
+      const t = svgEl('text', {
+        x: a.x + b.padX, y: a.y, fill: Render.textInk(col), 'font-size': b.fs, 'font-weight': 600,
+        'font-family': 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif', 'dominant-baseline': 'middle'
+      });
+      t.textContent = a.text;
+      return [svgEl('rect', {
+        x: a.x, y: a.y - b.h / 2, width: b.w, height: b.h, rx: b.r, fill: col,
+        stroke: col === '#FFFFFF' ? '#6B6E72' : 'none', 'stroke-width': 1.5 * k
+      }), t];
+    }
+    if (a.type === 'rect' || a.type === 'ellipse') {
+      const n = norm(a);
+      if (a.type === 'ellipse') {
+        return [svgEl('ellipse', { cx: n.x + n.w / 2, cy: n.y + n.h / 2, rx: n.w / 2, ry: n.h / 2, fill: 'none', stroke: col, 'stroke-width': 4 * k })];
+      }
+      return [svgEl('rect', { x: n.x, y: n.y, width: n.w, height: n.h, rx: 4 * k, fill: 'none', stroke: col, 'stroke-width': 4 * k })];
+    }
+    const out = [svgEl('line', {
+      x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, stroke: col, 'stroke-width': 4 * k,
+      'stroke-linecap': 'round', 'marker-end': markerFor(col)
+    })];
+    // Ältere Pfeile mit Beschriftung am Anfang
+    if (a.text) {
+      const t = svgEl('text', {
+        x: a.x1, y: a.y1, fill: Render.textInk(col), 'font-size': 15 * k, 'font-weight': 600,
+        'font-family': 'system-ui, sans-serif', 'dominant-baseline': 'middle',
+        'text-anchor': a.x2 >= a.x1 ? 'end' : 'start', stroke: col, 'stroke-width': 8 * k,
+        'paint-order': 'stroke', 'stroke-linejoin': 'round'
+      });
+      t.textContent = a.text;
+      out.push(t);
+    }
+    return out;
   }
 
   // ---- Werkzeuge ----
 
+  const ANNO_TOOLS = new Set(['arrow', 'text', 'rect', 'ellipse']);
+  const SEL_HINT = ' Vorhandenes anklicken zum Auswählen, ziehen zum Verschieben, an den Griffen ändern, Entf zum Löschen.';
   const HINTS = {
-    redact: 'Rechteck über den Bereich ziehen. Die Schwärzung wird fest ins Bild gerechnet.',
+    redact: 'Rechteck ziehen, um zu schwärzen. Auf eine bestehende Schwärzung klicken, um sie zu entfernen. Beim Export wird die Schwärzung fest ins Bild gerechnet.',
     crop: 'Rechteck über den Bereich ziehen, der erhalten bleiben soll.',
     marker: 'Auf die Stelle klicken, an der der Klickpunkt sitzen soll.',
-    arrow: 'Vom Text zum Ziel ziehen. Danach optional einen Text eingeben.'
+    arrow: 'Ziehen, um einen Pfeil zu zeichnen.' + SEL_HINT,
+    text: 'Auf eine freie Stelle klicken, um einen Text zu setzen.' + SEL_HINT,
+    rect: 'Ziehen, um ein Rechteck zu zeichnen.' + SEL_HINT,
+    ellipse: 'Ziehen, um einen Kreis oder ein Oval zu zeichnen.' + SEL_HINT
   };
+  const TYPE_LABEL = { arrow: 'Pfeil', text: 'Text', rect: 'Rechteck', ellipse: 'Kreis' };
+
+  function selected() {
+    const s = current();
+    return s && s.annotations ? s.annotations[S.selAnno] || null : null;
+  }
+
+  function norm(a) {
+    return { x: Math.min(a.x, a.x + a.w), y: Math.min(a.y, a.y + a.h), w: Math.abs(a.w), h: Math.abs(a.h) };
+  }
+
+  /** Umrandung einer Annotation in Bildpixeln. */
+  function annoBox(a, k) {
+    if (a.type === 'text') {
+      const b = Render.textBox(a.text || ' ', k);
+      return { x: a.x, y: a.y - b.h / 2, w: b.w, h: b.h };
+    }
+    if (a.type === 'arrow') {
+      return { x: Math.min(a.x1, a.x2), y: Math.min(a.y1, a.y2), w: Math.abs(a.x2 - a.x1), h: Math.abs(a.y2 - a.y1) };
+    }
+    return norm(a);
+  }
+
+  function handles(a) {
+    if (a.type === 'arrow') return [{ id: 'p1', x: a.x1, y: a.y1 }, { id: 'p2', x: a.x2, y: a.y2 }];
+    if (a.type === 'rect' || a.type === 'ellipse') {
+      const n = norm(a);
+      return [
+        { id: 'nw', x: n.x, y: n.y }, { id: 'ne', x: n.x + n.w, y: n.y },
+        { id: 'sw', x: n.x, y: n.y + n.h }, { id: 'se', x: n.x + n.w, y: n.y + n.h }
+      ];
+    }
+    return [];
+  }
+
+  /** Oberste Annotation unter dem Punkt. */
+  function hitAnnotation(s, p) {
+    const k = Render.scaleOf(s);
+    const tol = 10 * k;
+    const list = s.annotations || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const a = list[i];
+      if (a.type === 'arrow') {
+        const dx = a.x2 - a.x1;
+        const dy = a.y2 - a.y1;
+        const len2 = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((p.x - a.x1) * dx + (p.y - a.y1) * dy) / len2));
+        if (Math.hypot(p.x - (a.x1 + t * dx), p.y - (a.y1 + t * dy)) <= tol) return i;
+      } else if (a.type === 'text') {
+        if (!a.text) continue;
+        const b = annoBox(a, k);
+        if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return i;
+      } else if (a.type === 'rect') {
+        const n = norm(a);
+        const inside = p.x >= n.x - tol && p.x <= n.x + n.w + tol && p.y >= n.y - tol && p.y <= n.y + n.h + tol;
+        const innerCore = p.x > n.x + tol && p.x < n.x + n.w - tol && p.y > n.y + tol && p.y < n.y + n.h - tol;
+        if (inside && !innerCore) return i; // nur am Rand, damit man darin neue Formen ziehen kann
+      } else if (a.type === 'ellipse') {
+        const n = norm(a);
+        const rx = n.w / 2 || 1;
+        const ry = n.h / 2 || 1;
+        const d = Math.hypot((p.x - n.x - rx) / rx, (p.y - n.y - ry) / ry);
+        if (Math.abs(d - 1) * Math.min(rx, ry) <= tol) return i;
+      }
+    }
+    return -1;
+  }
+
+  function hitHandle(a, p, k) {
+    for (const h of handles(a)) {
+      if (Math.abs(p.x - h.x) <= 9 * k && Math.abs(p.y - h.y) <= 9 * k) return h.id;
+    }
+    return null;
+  }
+
+  /** Leer gelassene Texte nicht stehen lassen. */
+  function dropEmptyTexts() {
+    const s = current();
+    if (!s || !(s.annotations || []).some((a) => a.type === 'text' && !a.text)) return;
+    s.annotations = s.annotations.filter((a) => a.type !== 'text' || a.text);
+    S.selAnno = -1;
+    saveStep(s);
+  }
 
   function setTool(t) {
+    dropEmptyTexts();
     S.tool = S.tool === t ? null : t;
     $('ed-toolbar').querySelectorAll('[data-tool]').forEach((b) => {
       b.setAttribute('aria-pressed', b.dataset.tool === S.tool ? 'true' : 'false');
@@ -332,18 +476,51 @@ var Editor = (() => {
     stage.classList.toggle('tool-on', !!S.tool);
     stage.classList.toggle('tool-marker', S.tool === 'marker');
     $('ed-hint').textContent = S.tool ? HINTS[S.tool] : '';
+    $('ed-colors').hidden = !ANNO_TOOLS.has(S.tool);
+    if (!ANNO_TOOLS.has(S.tool)) S.selAnno = -1;
+    drawOverlay();
     if (S.tool !== 'crop') cancelCrop();
-    showArrowBar();
+    showAnnoBar();
   }
 
-  function showArrowBar() {
+  function showAnnoBar() {
+    const a = selected();
+    const on = ANNO_TOOLS.has(S.tool) && !!a;
+    $('ed-anno-bar').hidden = !on;
+    if (!on) return;
+    $('ed-anno-text-wrap').hidden = a.type !== 'text';
+    $('ed-anno-text').value = a.type === 'text' ? a.text || '' : '';
+    $('ed-anno-remove').textContent = `${TYPE_LABEL[a.type] || 'Element'} entfernen`;
+    renderColors();
+  }
+
+  function setColor(hex) {
+    S.color = hex;
+    try { localStorage.setItem('wfr-color', hex); } catch (_) { /* nur Komfort */ }
+    const a = selected();
     const s = current();
-    const has = s && (s.annotations || []).length > 0;
-    $('ed-arrow-bar').hidden = S.tool !== 'arrow';
-    $('ed-arrows-clear').hidden = !has;
-    const a = s && s.annotations && s.annotations[S.lastArrow];
-    $('ed-arrow-text').disabled = !a;
-    $('ed-arrow-text').value = a ? a.text || '' : '';
+    if (a && s) {
+      pushUndo(s);
+      a.color = hex;
+      saveStep(s);
+      drawOverlay();
+    }
+    renderColors();
+  }
+
+  /** Farbleiste: zeigt die Farbe der Auswahl, sonst die zuletzt gewählte. */
+  function renderColors() {
+    const a = selected();
+    const cur = a ? Render.colorOf(a) : S.color;
+    for (const b of $('ed-colors').querySelectorAll('.swatch')) {
+      b.setAttribute('aria-checked', b.dataset.hex === cur ? 'true' : 'false');
+    }
+  }
+
+  function focusText() {
+    const inp = $('ed-anno-text');
+    inp.focus();
+    inp.select();
   }
 
   function toImg(e) {
@@ -358,14 +535,15 @@ var Editor = (() => {
   function snapshot(s) {
     return {
       image: s.image, imgW: s.imgW, imgH: s.imgH, x: s.x, y: s.y, vw: s.vw, vh: s.vh,
-      showMarker: s.showMarker, annotations: (s.annotations || []).map((a) => ({ ...a }))
+      showMarker: s.showMarker, annotations: (s.annotations || []).map((a) => ({ ...a })),
+      redactions: (s.redactions || []).map((q) => ({ ...q }))
     };
   }
 
-  function pushUndo(s) {
+  function pushUndo(s, snap) {
     const st = S.undo.get(s.id) || [];
-    st.push(snapshot(s));
-    if (st.length > 20) st.shift();
+    st.push(snap || snapshot(s));
+    if (st.length > 30) st.shift();
     S.undo.set(s.id, st);
     updateUndo();
   }
@@ -380,8 +558,21 @@ var Editor = (() => {
     const st = s && S.undo.get(s.id);
     if (!st || !st.length) return;
     Object.assign(s, st.pop());
+    S.selAnno = -1;
     await saveStep(s);
     renderStep();
+    showAnnoBar();
+  }
+
+  async function removeSelected() {
+    const s = current();
+    if (!s || !selected()) return;
+    pushUndo(s);
+    s.annotations = s.annotations.filter((_, j) => j !== S.selAnno);
+    S.selAnno = -1;
+    await saveStep(s);
+    drawOverlay();
+    showAnnoBar();
   }
 
   function onStageDown(e) {
@@ -389,6 +580,7 @@ var Editor = (() => {
     if (!s || !S.tool || e.button !== 0) return;
     e.preventDefault();
     const p = toImg(e);
+    const k = Render.scaleOf(s);
     if (S.tool === 'marker') {
       pushUndo(s);
       s.x = (p.x / s.imgW) * s.vw;
@@ -399,24 +591,94 @@ var Editor = (() => {
       drawOverlay();
       return;
     }
-    $('ed-stage').setPointerCapture(e.pointerId);
-    if (S.tool === 'arrow') {
-      S.drag = { start: p, arrow: { x1: p.x, y1: p.y, x2: p.x, y2: p.y } };
-    } else {
-      S.pendingCrop = null;
-      $('ed-crop-bar').hidden = true;
-      S.drag = { start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } };
+    if (S.tool === 'redact') {
+      const list = s.redactions || [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const q = list[i];
+        if (p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h) {
+          pushUndo(s);
+          s.redactions = list.filter((_, j) => j !== i);
+          saveStep(s);
+          drawOverlay();
+          U.toast('Schwärzung entfernt');
+          return;
+        }
+      }
     }
+    $('ed-stage').setPointerCapture(e.pointerId);
+
+    if (ANNO_TOOLS.has(S.tool)) {
+      // 1. Griff der aktuellen Auswahl, 2. vorhandene Annotation, 3. neu anlegen
+      const sel = selected();
+      const handle = sel ? hitHandle(sel, p, k) : null;
+      if (handle) {
+        S.drag = { mode: 'handle', handle, start: p, orig: { ...sel }, before: snapshot(s), moved: false };
+        return;
+      }
+      const hit = hitAnnotation(s, p);
+      if (hit >= 0) {
+        S.selAnno = hit;
+        S.drag = { mode: 'move', start: p, orig: { ...s.annotations[hit] }, before: snapshot(s), moved: false };
+        drawOverlay();
+        showAnnoBar();
+        return;
+      }
+      S.selAnno = -1;
+      showAnnoBar();
+      if (S.tool === 'text') {
+        dropEmptyTexts();
+        pushUndo(s);
+        s.annotations = (s.annotations || []).concat({ type: 'text', x: p.x, y: p.y, text: 'Text', color: S.color });
+        S.selAnno = s.annotations.length - 1;
+        saveStep(s);
+        drawOverlay();
+        showAnnoBar();
+        focusText();
+        S.drag = null;
+        return;
+      }
+      const anno = S.tool === 'arrow'
+        ? { type: 'arrow', x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: S.color }
+        : { type: S.tool, x: p.x, y: p.y, w: 0, h: 0, color: S.color };
+      S.drag = { mode: 'new', start: p, anno };
+      drawOverlay();
+      return;
+    }
+
+    S.pendingCrop = null;
+    $('ed-crop-bar').hidden = true;
+    S.drag = { start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } };
   }
 
   function onStageMove(e) {
-    if (!S.drag) return;
+    const d = S.drag;
+    if (!d) return;
     const p = toImg(e);
-    if (S.drag.arrow) {
-      S.drag.arrow.x2 = p.x;
-      S.drag.arrow.y2 = p.y;
-    } else {
-      S.drag.rect = { x: S.drag.start.x, y: S.drag.start.y, w: p.x - S.drag.start.x, h: p.y - S.drag.start.y };
+    const s = current();
+    const dx = p.x - d.start.x;
+    const dy = p.y - d.start.y;
+    if (d.mode === 'new') {
+      if (d.anno.type === 'arrow') { d.anno.x2 = p.x; d.anno.y2 = p.y; } else { d.anno.w = dx; d.anno.h = dy; }
+    } else if (d.mode === 'move' || d.mode === 'handle') {
+      const a = s.annotations[S.selAnno];
+      if (!a) return;
+      d.moved = d.moved || Math.hypot(dx, dy) > 2;
+      const o = d.orig;
+      if (d.mode === 'move') {
+        if (a.type === 'arrow') Object.assign(a, { x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy });
+        else Object.assign(a, { x: o.x + dx, y: o.y + dy });
+      } else if (a.type === 'arrow') {
+        if (d.handle === 'p1') Object.assign(a, { x1: p.x, y1: p.y });
+        else Object.assign(a, { x2: p.x, y2: p.y });
+      } else {
+        // Gegenüberliegende Ecke bleibt fest.
+        const n = norm(o);
+        const fx = d.handle.includes('w') ? n.x + n.w : n.x;
+        const fy = d.handle.includes('n') ? n.y + n.h : n.y;
+        Object.assign(a, { x: fx, y: fy, w: p.x - fx, h: p.y - fy });
+      }
+    } else if (d.rect) {
+      d.rect = { x: d.start.x, y: d.start.y, w: dx, h: dy };
     }
     drawOverlay();
   }
@@ -427,29 +689,42 @@ var Editor = (() => {
     S.drag = null;
     const s = current();
     const k = Render.scaleOf(s);
-    if (d.arrow) {
-      const a = d.arrow;
-      if (Math.hypot(a.x2 - a.x1, a.y2 - a.y1) < 12 * k) { drawOverlay(); return; }
-      pushUndo(s);
-      s.annotations = (s.annotations || []).concat({ type: 'arrow', ...a, text: '' });
-      S.lastArrow = s.annotations.length - 1;
-      await saveStep(s);
+
+    if (d.mode === 'move' || d.mode === 'handle') {
+      const a = s.annotations[S.selAnno];
+      if (d.moved && a) {
+        if (a.type === 'rect' || a.type === 'ellipse') Object.assign(a, norm(a));
+        pushUndo(s, d.before);
+        await saveStep(s);
+      }
       drawOverlay();
-      showArrowBar();
-      $('ed-arrow-text').focus();
+      showAnnoBar();
       return;
     }
+    if (d.mode === 'new') {
+      const a = d.anno;
+      const big = a.type === 'arrow'
+        ? Math.hypot(a.x2 - a.x1, a.y2 - a.y1) >= 12 * k
+        : Math.abs(a.w) >= 8 * k && Math.abs(a.h) >= 8 * k;
+      if (big) {
+        if (a.type !== 'arrow') Object.assign(a, norm(a));
+        pushUndo(s);
+        s.annotations = (s.annotations || []).concat(a);
+        S.selAnno = s.annotations.length - 1;
+        await saveStep(s);
+      }
+      drawOverlay();
+      showAnnoBar();
+      return;
+    }
+
     const r = Render.clampRect(d.rect, s.imgW, s.imgH);
     if (r.w < 4 * k || r.h < 4 * k) { drawOverlay(); return; }
     if (S.tool === 'redact') {
-      const blob = await Render.bakeRedaction(s, r);
-      if (blob) {
-        pushUndo(s);
-        s.image = blob;
-        await saveStep(s);
-        renderStep();
-        U.toast('Bereich geschwärzt');
-      }
+      pushUndo(s);
+      s.redactions = (s.redactions || []).concat({ ...r, auto: false });
+      await saveStep(s);
+      drawOverlay();
     } else if (S.tool === 'crop') {
       S.pendingCrop = r;
       $('ed-crop-bar').hidden = false;
@@ -581,24 +856,21 @@ var Editor = (() => {
     $('ed-add-section').addEventListener('click', addSection);
     $('ed-crop-apply').addEventListener('click', applyCrop);
     $('ed-crop-cancel').addEventListener('click', cancelCrop);
-    $('ed-arrow-text').addEventListener('input', (e) => {
+    $('ed-anno-text').addEventListener('input', (e) => {
       const s = current();
-      const a = s && s.annotations && s.annotations[S.lastArrow];
-      if (!a) return;
+      const a = selected();
+      if (!a || a.type !== 'text') return;
       a.text = e.target.value.replace(/\s+/g, ' ').slice(0, 80);
       drawOverlay();
       saveLater('step-' + s.id, () => saveStep(s));
     });
-    $('ed-arrows-clear').addEventListener('click', async () => {
-      const s = current();
-      if (!s) return;
-      pushUndo(s);
-      s.annotations = [];
-      S.lastArrow = -1;
-      await saveStep(s);
-      drawOverlay();
-      showArrowBar();
-    });
+    $('ed-anno-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+    $('ed-anno-remove').addEventListener('click', removeSelected);
+    $('ed-colors').append(U.el('span', { class: 'lbl', text: 'Farbe' }), ...Render.COLORS.map((c) => U.el('button', {
+      class: 'swatch', type: 'button', role: 'radio', title: c.name, 'aria-label': c.name,
+      dataset: { hex: c.hex }, style: { background: c.hex }, onclick: () => setColor(c.hex)
+    })));
+    renderColors();
 
     const stage = $('ed-stage');
     stage.addEventListener('pointerdown', onStageDown);
@@ -615,6 +887,11 @@ var Editor = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && S.tool && !$('export').open) setTool(null);
+      const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName);
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && selected() && ANNO_TOOLS.has(S.tool)) {
+        e.preventDefault();
+        removeSelected();
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey &&
         !['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
         e.preventDefault();

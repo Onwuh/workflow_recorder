@@ -29,16 +29,46 @@ var Project = (() => {
     return num(v, 0, 8.64e15, Date.now());
   }
 
+  const COLORS = ['#7A4FD1', '#C8372D', '#2B59C3', '#1D7A46', '#F2C200', '#1B1D1F', '#FFFFFF'];
+
+  /** Farbe nur aus der Palette; fehlt sie, bleibt das Feld weg (ältere Pfeile/Texte: rot). */
+  function withColor(out, a) {
+    if (COLORS.includes(a.color)) out.color = a.color;
+    return out;
+  }
+
   function annotation(a, imgW, imgH) {
-    if (!a || typeof a !== 'object' || a.type !== 'arrow') return null;
-    return {
+    if (!a || typeof a !== 'object') return null;
+    if (a.type === 'text') {
+      const text = line(a.text, 80);
+      if (!text) return null;
+      return withColor({ type: 'text', x: num(a.x, -imgW, 2 * imgW, 0), y: num(a.y, -imgH, 2 * imgH, 0), text }, a);
+    }
+    if (a.type === 'rect' || a.type === 'ellipse') {
+      const w = num(a.w, 1, 2 * imgW, NaN);
+      const h = num(a.h, 1, 2 * imgH, NaN);
+      if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
+      return withColor({ type: a.type, x: num(a.x, -imgW, 2 * imgW, 0), y: num(a.y, -imgH, 2 * imgH, 0), w, h }, a);
+    }
+    if (a.type !== 'arrow') return null;
+    return withColor({
       type: 'arrow',
       x1: num(a.x1, -imgW, 2 * imgW, 0),
       y1: num(a.y1, -imgH, 2 * imgH, 0),
       x2: num(a.x2, -imgW, 2 * imgW, 0),
       y2: num(a.y2, -imgH, 2 * imgH, 0),
       text: line(a.text, 80)
-    };
+    }, a);
+  }
+
+  function redaction(q, imgW, imgH) {
+    if (!q || typeof q !== 'object') return null;
+    const x = num(q.x, 0, imgW, NaN);
+    const y = num(q.y, 0, imgH, NaN);
+    const w = num(q.w, 0, imgW, NaN);
+    const h = num(q.h, 0, imgH, NaN);
+    if (![x, y, w, h].every(Number.isFinite) || w < 1 || h < 1) return null;
+    return { x, y, w, h, auto: q.auto === true };
   }
 
   /** Prüft das Manifest. Liefert { guide, steps } mit nur erlaubten Feldern oder wirft. */
@@ -83,6 +113,8 @@ var Project = (() => {
         imgW, imgH,
         showMarker: s.showMarker !== false,
         annotations: anns.map((a) => annotation(a, imgW, imgH)).filter(Boolean),
+        redactions: (Array.isArray(s.redactions) ? s.redactions.slice(0, 400) : [])
+          .map((q) => redaction(q, imgW, imgH)).filter(Boolean),
         unredacted: Math.round(num(s.unredacted, 0, 999, 0)),
         navigated: s.navigated === true,
         reviewed: s.reviewed === true,
@@ -117,6 +149,8 @@ var Project = (() => {
           imgW: s.imgW, imgH: s.imgH,
           showMarker: s.showMarker !== false,
           annotations: s.annotations || [],
+          // Schwärzungen sind in der Sicherung fest ins Bild gerechnet.
+          redactions: [],
           unredacted: s.unredacted || 0,
           navigated: !!s.navigated,
           reviewed: !!s.reviewed,

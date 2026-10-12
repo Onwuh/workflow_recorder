@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Recorder</title>
+<link rel="stylesheet" href="../ui.css">
+<link rel="stylesheet" href="../popup/popup.css">
+<link rel="stylesheet" href="sidebar.css">
+</head>
+<body class="sb">
+
+<!-- Kopf: bereit -->
+<section id="sb-ready" class="sb-ready" hidden>
+  <div class="head">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="#1B1D1F"></rect><circle cx="12" cy="12" r="4" fill="#2B59C3"></circle></svg>
+      <span>Workflow Recorder</span>
+    </div>
+    <button id="sb-settings" class="btn-icon" type="button" aria-label="Einstellungen" title="Einstellungen">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg>
+    </button>
+  </div>
+  <div class="start">
+    <button id="sb-start" class="btn-rec" type="button"><span class="dot" aria-hidden="true"></span>Aufnahme starten</button>
+    <div id="sb-perm" class="warn" hidden>
+      <span>Die Erweiterung braucht Zugriff auf Webseiten. <button id="sb-perm-btn" class="btn-link inline" type="button">Zugriff erlauben</button></span>
+    </div>
+    <p id="sb-error" class="error" role="alert" hidden></p>
+  </div>
+</section>
+
+<!-- Kopf: Aufnahme -->
+<section id="sb-rec" class="rec-head" hidden>
+  <div class="rec-row">
+    <span class="rec-label"><span id="sb-dot" class="rec-dot" aria-hidden="true"></span><span id="sb-status">AUFNAHME</span></span>
+    <span id="sb-time" class="mono rec-time">00:00</span>
+  </div>
+  <div class="rec-count">
+    <span id="sb-count" class="big">0</span>
+    <span id="sb-count-label">Schritte erfasst</span>
+  </div>
+  <div class="rec-actions">
+    <button id="sb-pause" class="btn-ghost" type="button"><span id="sb-pause-label">Pause</span></button>
+    <button id="sb-stop" class="btn-light" type="button">Fertig</button>
+  </div>
+</section>
+
+<!-- Schritte zum Prüfen -->
+<section class="sb-guide">
+  <div class="sb-guide-head">
+    <div class="sb-guide-titles">
+      <span class="eyebrow" id="sb-guide-label">Anleitung</span>
+      <span id="sb-guide-title" class="sb-guide-title">—</span>
+    </div>
+    <button id="sb-open" class="btn" type="button" hidden>Im Editor öffnen</button>
+  </div>
+  <div class="sb-tools">
+    <button id="sb-discard" class="btn-link" type="button" hidden>Letzten verwerfen</button>
+  </div>
+  <ol id="sb-steps" class="sb-steps" aria-label="Schritte"></ol>
+  <p id="sb-empty" class="empty" hidden>Noch keine Schritte. Starte eine Aufnahme und klicke auf der Seite.</p>
+</section>
+
+<script src="../db.js"></script>
+<script src="../settings.js"></script>
+<script src="../lib/util.js"></script>
+<script src="sidebar.js"></script>
+</body>
+</html>

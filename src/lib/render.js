@@ -1,12 +1,36 @@
 /* Bildbearbeitung auf Canvas.
-   - Schwärzen und Zuschneiden werden fest ins gespeicherte Bild gerechnet (das Original wird ersetzt).
-   - Klickmarker und Pfeile bleiben Vektordaten und werden erst beim Export ins Bild gezeichnet.
-   Koordinaten von Annotationen und Rechtecken sind Bildpixel. */
+   - Schwärzungen, Klickmarker und Pfeile sind Vektordaten am Schritt (Bildpixel) und lassen sich im Editor
+     entfernen. Beim Export (und in der Projektsicherung) werden sie fest ins Bild gerechnet: deckend,
+     kein Weichzeichner, das Original gelangt nie in eine exportierte Datei.
+   - Zuschneiden ersetzt das gespeicherte Bild. */
 'use strict';
 
 // eslint-disable-next-line no-unused-vars
 var Render = (() => {
   const REC = '#C8372D';
+
+  // Farben für Pfeil, Text und Formen. Standard Lila; ältere Annotationen ohne Farbe bleiben rot.
+  const COLORS = [
+    { id: 'lila', name: 'Lila', hex: '#7A4FD1' },
+    { id: 'rot', name: 'Rot', hex: '#C8372D' },
+    { id: 'blau', name: 'Blau', hex: '#2B59C3' },
+    { id: 'gruen', name: 'Grün', hex: '#1D7A46' },
+    { id: 'gelb', name: 'Gelb', hex: '#F2C200' },
+    { id: 'schwarz', name: 'Schwarz', hex: '#1B1D1F' },
+    { id: 'weiss', name: 'Weiß', hex: '#FFFFFF' }
+  ];
+  const DEFAULT_COLOR = '#7A4FD1';
+  const HEXES = new Set(COLORS.map((c) => c.hex));
+
+  /** Nur Farben aus der Palette; sonst die Vorgabe (fehlend = Rot für ältere Pfeile/Texte). */
+  function colorOf(a) {
+    return a && HEXES.has(a.color) ? a.color : REC;
+  }
+
+  /** Schriftfarbe auf der Textbox: dunkel auf hellen Farben, sonst weiß. */
+  function textInk(hex) {
+    return hex === '#FFFFFF' || hex === '#F2C200' ? '#1B1D1F' : '#FFFFFF';
+  }
   const REDACT = '#1B1D1F';
   const MAX_DIM = 16384;
 
@@ -78,9 +102,10 @@ var Render = (() => {
     const { x1, y1, x2, y2 } = a;
     const ang = Math.atan2(y2 - y1, x2 - x1);
     const head = 14 * s;
+    const col = colorOf(a);
     g.save();
-    g.strokeStyle = REC;
-    g.fillStyle = REC;
+    g.strokeStyle = col;
+    g.fillStyle = col;
     g.lineWidth = 4 * s;
     g.lineCap = 'round';
     const len = Math.hypot(x2 - x1, y2 - y1);
@@ -108,14 +133,63 @@ var Render = (() => {
       bx = Math.max(0, Math.min(g.canvas.width - tw - 2 * padX, bx));
       by = Math.max(0, Math.min(g.canvas.height - bh, by));
       roundRect(g, bx, by, tw + 2 * padX, bh, 5 * s);
-      g.fillStyle = REC;
+      g.fillStyle = col;
       g.fill();
-      g.fillStyle = '#FFFFFF';
+      g.fillStyle = textInk(col);
       g.textBaseline = 'middle';
       g.fillText(a.text, bx + padX, by + bh / 2);
     }
     g.restore();
   }
+
+  const FONT = '600 {px}px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  let measureCtx = null;
+
+  /** Maße der Textbox (Bildpixel). Box beginnt links bei x und ist vertikal um y zentriert. */
+  function textBox(text, s) {
+    if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+    const fs = 15 * s;
+    measureCtx.font = FONT.replace('{px}', fs);
+    const padX = 8 * s;
+    return { fs, padX, w: measureCtx.measureText(text).width + 2 * padX, h: fs + 10 * s, r: 5 * s };
+  }
+
+  function drawText(g, a, s) {
+    if (!a.text) return;
+    const b = textBox(a.text, s);
+    const col = colorOf(a);
+    g.save();
+    roundRect(g, a.x, a.y - b.h / 2, b.w, b.h, b.r);
+    g.fillStyle = col;
+    g.fill();
+    if (col === '#FFFFFF') {
+      // Weiße Box braucht eine Kante, sonst verschwindet sie auf hellem Grund.
+      g.lineWidth = 1.5 * s;
+      g.strokeStyle = '#6B6E72';
+      g.stroke();
+    }
+    g.font = FONT.replace('{px}', b.fs);
+    g.fillStyle = textInk(col);
+    g.textBaseline = 'middle';
+    g.fillText(a.text, a.x + b.padX, a.y);
+    g.restore();
+  }
+
+  /** Rechteck oder Ellipse als Umriss. */
+  function drawShape(g, a, s) {
+    const r = { x: Math.min(a.x, a.x + a.w), y: Math.min(a.y, a.y + a.h), w: Math.abs(a.w), h: Math.abs(a.h) };
+    if (!(r.w >= 1 && r.h >= 1)) return;
+    g.save();
+    g.strokeStyle = colorOf(a);
+    g.lineWidth = 4 * s;
+    g.beginPath();
+    if (a.type === 'ellipse') g.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, Math.PI * 2);
+    else if (g.roundRect) g.roundRect(r.x, r.y, r.w, r.h, 4 * s);
+    else g.rect(r.x, r.y, r.w, r.h);
+    g.stroke();
+    g.restore();
+  }
+
 
   /** Bereich um den Klickpunkt (für „auf Klickbereich zuschneiden“). */
   function clickRegion(step, cssW = 900, cssH = 560) {
@@ -144,8 +218,14 @@ var Render = (() => {
       g.drawImage(bmp, region.x, region.y, region.w, region.h, 0, 0, c.width, c.height);
       g.setTransform(k, 0, 0, k, -region.x * k, -region.y * k);
       const s = bmp.width / (step.vw || bmp.width) || 1;
-      for (const a of step.annotations || []) {
-        if (a && a.type === 'arrow') drawArrow(g, a, s);
+      // Schwärzung immer zuerst und deckend.
+      drawRedactions(g, step.redactions, s);
+      if (opts.annotations !== false) {
+        for (const a of step.annotations || []) {
+          if (a && a.type === 'arrow') drawArrow(g, a, s);
+          else if (a && a.type === 'text') drawText(g, a, s);
+          else if (a && (a.type === 'rect' || a.type === 'ellipse')) drawShape(g, a, s);
+        }
       }
       if (opts.marker && step.showMarker !== false) {
         const { cx, cy } = markerPos({ ...step, imgW: bmp.width, imgH: bmp.height });
@@ -158,22 +238,14 @@ var Render = (() => {
     }
   }
 
-  /** Schwärzt ein Rechteck dauerhaft (deckend, kein Weichzeichner). Liefert ein neues PNG. */
-  async function bakeRedaction(step, rect) {
-    const bmp = await bitmap(step.image);
-    try {
-      const r = clampRect(rect, bmp.width, bmp.height);
-      if (r.w < 2 || r.h < 2) return null;
-      const c = canvas(bmp.width, bmp.height);
-      const g = c.getContext('2d');
-      g.drawImage(bmp, 0, 0);
-      g.fillStyle = REDACT;
-      roundRect(g, r.x, r.y, r.w, r.h, 3 * scaleOf(step));
+  function drawRedactions(g, list, s) {
+    g.save();
+    g.fillStyle = REDACT;
+    for (const r of list || []) {
+      roundRect(g, r.x, r.y, r.w, r.h, 3 * s);
       g.fill();
-      return await toBlob(c, 'image/png');
-    } finally {
-      bmp.close();
     }
+    g.restore();
   }
 
   /** Schneidet dauerhaft zu. Liefert die geänderten Schrittfelder (Bild, Maße, Klickpunkt, Pfeile). */
@@ -191,11 +263,14 @@ var Render = (() => {
       const vw = r.w * cssPerPx;
       const vh = r.h * (step.vh / bmp.height);
       const inside = x >= 0 && y >= 0 && x <= vw && y <= vh;
-      const annotations = (step.annotations || []).map((a) => ({
-        ...a, x1: a.x1 - r.x, y1: a.y1 - r.y, x2: a.x2 - r.x, y2: a.y2 - r.y
-      }));
+      const annotations = (step.annotations || []).map((a) => (a.type !== 'arrow'
+        ? { ...a, x: a.x - r.x, y: a.y - r.y }
+        : { ...a, x1: a.x1 - r.x, y1: a.y1 - r.y, x2: a.x2 - r.x, y2: a.y2 - r.y }));
+      const redactions = (step.redactions || [])
+        .map((q) => ({ ...clampRect({ x: q.x - r.x, y: q.y - r.y, w: q.w, h: q.h }, r.w, r.h), auto: !!q.auto }))
+        .filter((q) => q.w > 0 && q.h > 0);
       return {
-        image, imgW: r.w, imgH: r.h, vw, vh,
+        image, imgW: r.w, imgH: r.h, vw, vh, redactions,
         x: Math.max(0, Math.min(vw, x)), y: Math.max(0, Math.min(vh, y)),
         showMarker: inside ? step.showMarker : false,
         annotations
@@ -218,5 +293,21 @@ var Render = (() => {
     }
   }
 
-  return { renderStep, bakeRedaction, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
+  /** Bild auf weißem Grund als JPEG (für PDF; Transparenz würde sonst schwarz). */
+  async function toJpeg(blob, { maxWidth = 0, quality = 0.9 } = {}) {
+    const bmp = await bitmap(blob);
+    try {
+      const k = maxWidth && bmp.width > maxWidth ? maxWidth / bmp.width : 1;
+      const c = canvas(bmp.width * k, bmp.height * k);
+      const g = c.getContext('2d');
+      g.fillStyle = '#FFFFFF';
+      g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(bmp, 0, 0, c.width, c.height);
+      return { blob: await toBlob(c, 'image/jpeg', quality), width: c.width, height: c.height };
+    } finally {
+      bmp.close();
+    }
+  }
+
+  return { COLORS, DEFAULT_COLOR, colorOf, textInk, toJpeg, textBox, renderStep, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
 })();

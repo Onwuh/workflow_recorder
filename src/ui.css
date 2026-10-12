@@ -98,6 +98,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .toast.error { background: var(--danger); }
 
+/* Vorschaubilder: Bild füllt die Box ohne Beschnitt, damit Schwärzungen und Marker exakt sitzen. */
+.thumb-box { position: relative; overflow: hidden; background: #E4E5E1; }
+.thumb-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; }
+.thumb-rd { position: absolute; background: #1B1D1F; }
+.thumb-mk {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--rec);
+  transform: translate(-50%, -50%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
