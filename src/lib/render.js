@@ -118,6 +118,32 @@ var Render = (() => {
     g.restore();
   }
 
+  const FONT = '600 {px}px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  let measureCtx = null;
+
+  /** Maße der Textbox (Bildpixel). Box beginnt links bei x und ist vertikal um y zentriert. */
+  function textBox(text, s) {
+    if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+    const fs = 15 * s;
+    measureCtx.font = FONT.replace('{px}', fs);
+    const padX = 8 * s;
+    return { fs, padX, w: measureCtx.measureText(text).width + 2 * padX, h: fs + 10 * s, r: 5 * s };
+  }
+
+  function drawText(g, a, s) {
+    if (!a.text) return;
+    const b = textBox(a.text, s);
+    g.save();
+    roundRect(g, a.x, a.y - b.h / 2, b.w, b.h, b.r);
+    g.fillStyle = REC;
+    g.fill();
+    g.font = FONT.replace('{px}', b.fs);
+    g.fillStyle = '#FFFFFF';
+    g.textBaseline = 'middle';
+    g.fillText(a.text, a.x + b.padX, a.y);
+    g.restore();
+  }
+
   /** Bereich um den Klickpunkt (für „auf Klickbereich zuschneiden“). */
   function clickRegion(step, cssW = 900, cssH = 560) {
     const s = scaleOf(step);
@@ -150,6 +176,7 @@ var Render = (() => {
       if (opts.annotations !== false) {
         for (const a of step.annotations || []) {
           if (a && a.type === 'arrow') drawArrow(g, a, s);
+          else if (a && a.type === 'text') drawText(g, a, s);
         }
       }
       if (opts.marker && step.showMarker !== false) {
@@ -188,9 +215,9 @@ var Render = (() => {
       const vw = r.w * cssPerPx;
       const vh = r.h * (step.vh / bmp.height);
       const inside = x >= 0 && y >= 0 && x <= vw && y <= vh;
-      const annotations = (step.annotations || []).map((a) => ({
-        ...a, x1: a.x1 - r.x, y1: a.y1 - r.y, x2: a.x2 - r.x, y2: a.y2 - r.y
-      }));
+      const annotations = (step.annotations || []).map((a) => (a.type === 'text'
+        ? { ...a, x: a.x - r.x, y: a.y - r.y }
+        : { ...a, x1: a.x1 - r.x, y1: a.y1 - r.y, x2: a.x2 - r.x, y2: a.y2 - r.y }));
       const redactions = (step.redactions || [])
         .map((q) => ({ ...clampRect({ x: q.x - r.x, y: q.y - r.y, w: q.w, h: q.h }, r.w, r.h), auto: !!q.auto }))
         .filter((q) => q.w > 0 && q.h > 0);
@@ -234,5 +261,5 @@ var Render = (() => {
     }
   }
 
-  return { toJpeg, renderStep, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
+  return { toJpeg, textBox, renderStep, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
 })();

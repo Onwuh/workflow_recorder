@@ -24,7 +24,7 @@ Bekannte Lücke: Datensatznamen in Breadcrumb, Listenansichten und Chatter erfas
 ## Editor
 
 - Schrittliste mit Auswahl, Schritttext bearbeiten, Schritte löschen.
-- Werkzeuge: Schwärzen, Zuschneiden, Klickpunkt verschieben, Pfeil/Text.
+- Werkzeuge: Schwärzung bearbeiten (hinzufügen und per Klick entfernen), Zuschneiden, Klickpunkt verschieben, Pfeil, Text.
 - Optionale Einleitung und Hinweise pro Schritt.
 
 ## Speicherung

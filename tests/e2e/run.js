@@ -200,6 +200,50 @@ function check(cond, msg) {
   const after = await editor.evaluate(async () => { const s = await DB.getStep(Editor.state.steps[0].id); return { w: s.imgW, bw: (await createImageBitmap(s.image)).width }; });
   check(after.w < before.w && after.w === after.bw, `Zuschneiden fest im Bild (${before.w} → ${after.w})`);
 
+  // Werkzeugleiste: „Schwärzung bearbeiten“, „Pfeil“ und „Text“ getrennt
+  const tools = await editor.locator('#ed-toolbar .tool').allInnerTexts();
+  check(tools.map((t) => t.trim()).join('|').startsWith('Schwärzung bearbeiten|Zuschneiden|Klickpunkt verschieben|Pfeil|Text|'),
+    'Werkzeuge: ' + tools.map((t) => t.trim()).join(', '));
+
+  // Pfeil: ziehen erzeugt einen Pfeil, Klick auf den Pfeil entfernt ihn
+  const box2 = await editor.locator('#ed-stage').boundingBox();
+  await editor.click('[data-tool="arrow"]');
+  await editor.mouse.move(box2.x + 40, box2.y + 120);
+  await editor.mouse.down();
+  await editor.mouse.move(box2.x + 200, box2.y + 120, { steps: 5 });
+  await editor.mouse.up();
+  await editor.waitForTimeout(300);
+  const annos = async () => editor.evaluate(async () => (await DB.getStep(Editor.state.steps[0].id)).annotations || []);
+  let an = await annos();
+  check(an.length === 1 && an[0].type === 'arrow' && !an[0].text, 'Pfeil ohne Text angelegt');
+  await editor.mouse.click(box2.x + 120, box2.y + 120);
+  await editor.waitForTimeout(300);
+  an = await annos();
+  check(an.length === 0, 'Pfeil per Klick entfernt');
+
+  // Text: Klick setzt eine Textbox, Eingabe ändert sie, sie erscheint im Export
+  await editor.click('[data-tool="text"]');
+  await editor.mouse.click(box2.x + 60, box2.y + 180);
+  await editor.waitForTimeout(200);
+  check(await editor.locator('#ed-text-bar').isVisible(), 'Textfeld erscheint nach Klick');
+  await editor.fill('#ed-anno-text', 'Hier klicken');
+  await editor.waitForTimeout(600);
+  an = await annos();
+  check(an.length === 1 && an[0].type === 'text' && an[0].text === 'Hier klicken', 'Text gespeichert: ' + JSON.stringify(an));
+  const textPx = await editor.evaluate(async () => {
+    const st = await DB.getStep(Editor.state.steps[0].id);
+    const a = st.annotations[0];
+    const out = (await Render.renderStep(st, { marker: false })).blob;
+    const bmp = await createImageBitmap(out);
+    const c = new OffscreenCanvas(bmp.width, bmp.height);
+    const g = c.getContext('2d');
+    g.drawImage(bmp, 0, 0);
+    return Array.from(g.getImageData(Math.round(a.x + 3), Math.round(a.y), 1, 1).data);
+  });
+  check(textPx[0] === 0xC8 && textPx[1] === 0x37 && textPx[2] === 0x2D, 'Textbox im Export eingezeichnet ' + textPx);
+  await editor.screenshot({ path: path.join(OUT, 'editor-text.png') });
+  await editor.click('[data-tool="text"]');
+
   // Text bearbeiten, Abschnitt einfügen
   await editor.fill('#ed-text', 'Klicke auf „Bestätigen“ <script>alert(1)</script>');
   await editor.fill('#ed-note', 'Hinweis mit <b>HTML</b> & Sonderzeichen');

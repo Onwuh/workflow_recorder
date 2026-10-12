@@ -46,7 +46,7 @@ scripts/build.js    Pakete für Chrome und Firefox (dist/)
 tests/              Unit-Tests (node --test) und e2e/ (Playwright, Chromium)
 ```
 
-Schritte haben `type: 'step' | 'section'`. Schwärzungen (`redactions`), Klickmarker und Pfeile (`annotations`) sind Vektordaten in Bildpixeln und werden erst beim Export eingezeichnet. Nur Zuschneiden ersetzt das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
+Schritte haben `type: 'step' | 'section'`. Schwärzungen (`redactions`), Klickmarker, Pfeile und Texte (`annotations`, Typ `arrow` oder `text`) sind Vektordaten in Bildpixeln und werden erst beim Export eingezeichnet. Nur Zuschneiden ersetzt das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
 
 ## Umsetzungshinweise
 

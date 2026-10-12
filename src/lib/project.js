@@ -30,7 +30,13 @@ var Project = (() => {
   }
 
   function annotation(a, imgW, imgH) {
-    if (!a || typeof a !== 'object' || a.type !== 'arrow') return null;
+    if (!a || typeof a !== 'object') return null;
+    if (a.type === 'text') {
+      const text = line(a.text, 80);
+      if (!text) return null;
+      return { type: 'text', x: num(a.x, -imgW, 2 * imgW, 0), y: num(a.y, -imgH, 2 * imgH, 0), text };
+    }
+    if (a.type !== 'arrow') return null;
     return {
       type: 'arrow',
       x1: num(a.x1, -imgW, 2 * imgW, 0),
