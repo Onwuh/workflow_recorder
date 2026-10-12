@@ -41,6 +41,16 @@ var Project = (() => {
     };
   }
 
+  function redaction(q, imgW, imgH) {
+    if (!q || typeof q !== 'object') return null;
+    const x = num(q.x, 0, imgW, NaN);
+    const y = num(q.y, 0, imgH, NaN);
+    const w = num(q.w, 0, imgW, NaN);
+    const h = num(q.h, 0, imgH, NaN);
+    if (![x, y, w, h].every(Number.isFinite) || w < 1 || h < 1) return null;
+    return { x, y, w, h, auto: q.auto === true };
+  }
+
   /** Prüft das Manifest. Liefert { guide, steps } mit nur erlaubten Feldern oder wirft. */
   function validate(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Unbekanntes Dateiformat');
@@ -83,6 +93,8 @@ var Project = (() => {
         imgW, imgH,
         showMarker: s.showMarker !== false,
         annotations: anns.map((a) => annotation(a, imgW, imgH)).filter(Boolean),
+        redactions: (Array.isArray(s.redactions) ? s.redactions.slice(0, 400) : [])
+          .map((q) => redaction(q, imgW, imgH)).filter(Boolean),
         unredacted: Math.round(num(s.unredacted, 0, 999, 0)),
         navigated: s.navigated === true,
         reviewed: s.reviewed === true,
@@ -117,6 +129,8 @@ var Project = (() => {
           imgW: s.imgW, imgH: s.imgH,
           showMarker: s.showMarker !== false,
           annotations: s.annotations || [],
+          // Schwärzungen sind in der Sicherung fest ins Bild gerechnet.
+          redactions: [],
           unredacted: s.unredacted || 0,
           navigated: !!s.navigated,
           reviewed: !!s.reviewed,

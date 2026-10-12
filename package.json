@@ -1,12 +1,13 @@
 {
   "name": "workflow-recorder",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser-Erweiterung: Klick-Abläufe aufzeichnen und als Anleitung exportieren",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests scripts",
     "e2e": "node tests/e2e/run.js",
-    "lint:firefox": "npx web-ext lint --source-dir . --ignore-files \"tests/**\" \"docs/**\" \"eslint.config.js\" \"package.json\""
+    "lint:firefox": "npm run build && npx web-ext lint --source-dir dist/firefox",
+    "build": "node scripts/build.js"
   }
 }

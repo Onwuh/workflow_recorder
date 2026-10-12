@@ -36,25 +36,28 @@ src/
   lib/render.js     Canvas: Schwärzen/Zuschneiden fest ins Bild, Exportbild mit Marker und Pfeilen
   lib/zip.js        ZIP schreiben/lesen mit Schutzgrenzen
   lib/project.js    Format und Schema-Prüfung der Projektsicherung
+  lib/pdf.js        PDF-Schreiber (A4, Helvetica/WinAnsi, JPEG), PDF wird direkt heruntergeladen
   popup/            Popup bereit / Aufnahme
+  sidebar/          Seitenleiste: Aufnahme steuern, Schritte live prüfen
   editor/           Übersicht und Editor (editor.html?guide=<id>), Export-Dialog
   export/           exporters.js (HTML, Odoo, Markdown, Sicherung, Import), guide.css, preview.html (Vorschau/PDF)
   options/          Einstellungsseite
+scripts/build.js    Pakete für Chrome und Firefox (dist/)
 tests/              Unit-Tests (node --test) und e2e/ (Playwright, Chromium)
 ```
 
-Schritte haben `type: 'step' | 'section'`. Klickmarker und Pfeile (`annotations`, Bildpixel) bleiben Vektordaten und werden erst beim Export eingezeichnet. Schwärzen und Zuschneiden ersetzen das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
+Schritte haben `type: 'step' | 'section'`. Schwärzungen (`redactions`), Klickmarker und Pfeile (`annotations`) sind Vektordaten in Bildpixeln und werden erst beim Export eingezeichnet. Nur Zuschneiden ersetzt das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
 
 ## Umsetzungshinweise
 
 Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die beim Bau beachtet werden sollten.
 
 **Manifest für beide Browser**
-- `background` mit beiden Schlüsseln: `"service_worker": "src/background.js"` für Chrome und `"scripts": ["src/db.js", "src/background.js"]` für Firefox. Jeder Browser ignoriert den anderen Schlüssel mit einer Warnung.
+- Zwei Manifeste aus einer Quelle: `manifest.json` im Wurzelordner ist das für Chrome (`background.service_worker`, `side_panel`). `scripts/build.js` erzeugt das Firefox-Manifest (`background.scripts`, `sidebar_action`, `browser_specific_settings.gecko`, `strict_min_version` 121). Keine gemischten Schlüssel, sonst warnt Chrome („'background.scripts' requires manifest version of 2 or lower“).
 - Im Service Worker `db.js` per `importScripts('db.js')` laden, nur wenn `DB` noch nicht existiert.
-- `browser_specific_settings.gecko.id` setzen, `strict_min_version` 121.
-- Berechtigungen: `storage`, `tabs`, `scripting`, Host `<all_urls>`. In Firefox sind Host-Berechtigungen unter MV3 optional und müssen nach der Installation in den Add-on-Einstellungen erteilt werden. Das gehört in die Installationsanleitung.
+- Berechtigungen: `storage`, `tabs`, `scripting`, `unlimitedStorage`, Chrome zusätzlich `sidePanel`, Host `<all_urls>`. In Firefox sind Host-Berechtigungen unter MV3 optional und müssen nach der Installation in den Add-on-Einstellungen erteilt werden. Das gehört in die Installationsanleitung.
 - Kurzbefehl über `commands`: `Alt+Shift+R`.
+- `sidePanel.open()` (Chrome) und `sidebarAction.open()` (Firefox) nur direkt in der Klickbehandlung aufrufen, ohne vorheriges `await`.
 
 **Aufnahmezustand**
 - In `chrome.storage.session` halten, weil der Chrome Service Worker jederzeit beendet werden kann.
@@ -70,7 +73,10 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Pro Schritt `x, y` (CSS-Pixel), `vw, vh` und `devicePixelRatio` speichern. Der Klickmarker im Editor wird prozentual positioniert (`x / vw`, `y / vh`).
 
 **Auto-Schwärzung**
-- Vor dem Screenshot ein Overlay mit deckenden Boxen über passende Elemente legen, zwei Animation-Frames warten, Screenshot auslösen, Overlay entfernen. Overlay mit `pointer-events: none`.
+- Der Hintergrund fragt das Content-Script direkt vor und nach `captureVisibleTab` per `measure` nach den Flächen und vereinigt beide Ergebnisse. Gespeichert werden Rechtecke in Bildpixeln (`step.redactions`), das Bild bleibt unverändert, damit Schwärzungen im Editor entfernbar sind.
+- Fest ins Bild gerechnet wird in jedem Export und in der Projektsicherung (`Render.renderStep`).
+- Teile eines Feldes, die ein darüberliegender Dialog, Wizard, Menü oder Popover verdeckt, werden ausgespart (`elementFromPoint` an der Überlappung). Ein halbtransparenter Backdrop zählt nicht als Verdeckung.
+- Ein Maßstab für beide Achsen (`imgW / vw`). Ist der Screenshot niedriger als `innerHeight`, ist er abgeschnitten, nicht gestaucht: `vh` wird aus dem Bild abgeleitet.
 - Selektoren: `.o_field_widget[name="…"]` und `td[name="…"]` (Odoo-Listen) für eine konfigurierbare Feldliste, dazu `input[type=email|tel|password]`.
 - Standardliste: `partner_id, partner_invoice_id, partner_shipping_id, commercial_partner_id, email, email_from, phone, mobile, vat, street, street2, zip, city, bank_account_id, partner_bank_id, acc_number`.
 - Einstellung `autoRedact` (Standard an) in `chrome.storage.local`.
@@ -81,13 +87,13 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Texte auf 60 Zeichen kürzen.
 
 **Odoo-Wissen-Export**
-- Getestet am 2026-10-12: eingefügte Bilder bleiben als `data:image/…;base64` im Artikeltext, sie werden nicht zu Anhängen. Deshalb zuschneiden, maximal 1000 px Breite, WebP.
+- Getestet am 2026-10-12: eingefügte Bilder bleiben als `data:image/…;base64` im Artikeltext, sie werden nicht zu Anhängen. Deshalb maximal 1000 px Breite, WebP. Zuschneiden auf den Klickbereich nicht voreinstellen, das wirkt im Artikel gezoomt.
 - Zwischenablage mit `ClipboardItem` (`text/html` und `text/plain`). Fallback: Inhalt markieren und `document.execCommand('copy')`.
 - Testseite: `docs/tests/odoo-paste-test.html` (Seiteninhalt eines Claude-Artifacts, ohne eigenes `<html>`-Gerüst).
 
 ## Stand
 
-Umgesetzt: Aufnahme mit Auto-Schwärzung, Popup, Editor mit Schwärzen/Zuschneiden/Klickpunkt/Pfeilen, Abschnitte, Export (HTML, PDF über Druckansicht, Odoo-Zwischenablage, Markdown-ZIP), Projektsicherung und Import, Einstellungen.
+Umgesetzt: Aufnahme mit Auto-Schwärzung, Popup, Seitenleiste, Editor mit entfernbaren Schwärzungen, Zuschneiden, Klickpunkt, Pfeilen, Abschnitte, Export (HTML, PDF-Datei, Odoo-Zwischenablage, Markdown-ZIP), Projektsicherung und Import, Einstellungen.
 
 Prüfen vor jedem Commit: `npm test`, `npm run lint`, `npm run e2e`.
 

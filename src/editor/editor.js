@@ -29,14 +29,8 @@ var Editor = (() => {
     }
     const items = [];
     for (const g of guides) {
-      const thumb = el('div', { class: 'ov-thumb' });
       const steps = await DB.getSteps(g.id);
-      const first = steps.find((s) => s.image);
-      if (first) {
-        const u = URL.createObjectURL(first.image);
-        ovUrls.push(u);
-        thumb.appendChild(el('img', { src: u, alt: '' }));
-      }
+      const thumb = U.thumb(steps.find((s) => s.image), 'ov-thumb', ovUrls, { marker: false });
       const href = `editor.html?guide=${g.id}`;
       items.push(el('div', { class: 'ov-item' },
         thumb,
@@ -158,7 +152,9 @@ var Editor = (() => {
     renderMeta();
     setInterval(renderMeta, 30000);
     renderList();
-    select(0);
+    const want = U.intParam('step');
+    const idx = want ? S.steps.findIndex((x) => x.id === want) : -1;
+    select(idx >= 0 ? idx : 0);
   }
 
   // ---- Schrittliste ----
@@ -269,6 +265,15 @@ var Editor = (() => {
     defs.appendChild(marker);
     nodes.push(defs);
 
+    // Schwärzungen: im Editor als Flächen, im Schwärzen-Modus anklickbar zum Entfernen.
+    for (const q of s.redactions || []) {
+      nodes.push(svgEl('rect', {
+        x: q.x, y: q.y, width: q.w, height: q.h, rx: 3 * k, fill: '#1B1D1F',
+        stroke: S.tool === 'redact' ? '#FF5A4E' : 'none', 'stroke-width': 2 * k,
+        'stroke-dasharray': `${6 * k} ${4 * k}`
+      }));
+    }
+
     (s.annotations || []).forEach((a, i) => {
       nodes.push(svgEl('line', {
         x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, stroke: Render.REC, 'stroke-width': 4 * k,
@@ -317,7 +322,7 @@ var Editor = (() => {
   // ---- Werkzeuge ----
 
   const HINTS = {
-    redact: 'Rechteck über den Bereich ziehen. Die Schwärzung wird fest ins Bild gerechnet.',
+    redact: 'Rechteck ziehen, um zu schwärzen. Auf eine bestehende Schwärzung klicken, um sie zu entfernen. Beim Export wird die Schwärzung fest ins Bild gerechnet.',
     crop: 'Rechteck über den Bereich ziehen, der erhalten bleiben soll.',
     marker: 'Auf die Stelle klicken, an der der Klickpunkt sitzen soll.',
     arrow: 'Vom Text zum Ziel ziehen. Danach optional einen Text eingeben.'
@@ -332,6 +337,7 @@ var Editor = (() => {
     stage.classList.toggle('tool-on', !!S.tool);
     stage.classList.toggle('tool-marker', S.tool === 'marker');
     $('ed-hint').textContent = S.tool ? HINTS[S.tool] : '';
+    drawOverlay();
     if (S.tool !== 'crop') cancelCrop();
     showArrowBar();
   }
@@ -358,7 +364,8 @@ var Editor = (() => {
   function snapshot(s) {
     return {
       image: s.image, imgW: s.imgW, imgH: s.imgH, x: s.x, y: s.y, vw: s.vw, vh: s.vh,
-      showMarker: s.showMarker, annotations: (s.annotations || []).map((a) => ({ ...a }))
+      showMarker: s.showMarker, annotations: (s.annotations || []).map((a) => ({ ...a })),
+      redactions: (s.redactions || []).map((q) => ({ ...q }))
     };
   }
 
@@ -398,6 +405,20 @@ var Editor = (() => {
       saveStep(s);
       drawOverlay();
       return;
+    }
+    if (S.tool === 'redact') {
+      const list = s.redactions || [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const q = list[i];
+        if (p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h) {
+          pushUndo(s);
+          s.redactions = list.filter((_, j) => j !== i);
+          saveStep(s);
+          drawOverlay();
+          U.toast('Schwärzung entfernt');
+          return;
+        }
+      }
     }
     $('ed-stage').setPointerCapture(e.pointerId);
     if (S.tool === 'arrow') {
@@ -442,14 +463,10 @@ var Editor = (() => {
     const r = Render.clampRect(d.rect, s.imgW, s.imgH);
     if (r.w < 4 * k || r.h < 4 * k) { drawOverlay(); return; }
     if (S.tool === 'redact') {
-      const blob = await Render.bakeRedaction(s, r);
-      if (blob) {
-        pushUndo(s);
-        s.image = blob;
-        await saveStep(s);
-        renderStep();
-        U.toast('Bereich geschwärzt');
-      }
+      pushUndo(s);
+      s.redactions = (s.redactions || []).concat({ ...r, auto: false });
+      await saveStep(s);
+      drawOverlay();
     } else if (S.tool === 'crop') {
       S.pendingCrop = r;
       $('ed-crop-bar').hidden = false;

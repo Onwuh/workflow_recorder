@@ -35,5 +35,21 @@ td, th { border: 1px solid #ccc; padding: 6px 10px; }
   <thead><tr><th data-name="partner_id">Kunde</th><th data-name="amount">Betrag</th></tr></thead>
   <tbody><tr class="o_data_row"><td name="partner_id" id="rowcell">Beispielkunde GmbH</td><td name="amount">100,00</td></tr></tbody>
 </table>
+<button type="button" id="open-wizard">Assistent öffnen</button>
+<div class="modal-backdrop" id="wiz-bg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.35)"></div>
+<div class="o_dialog" id="wizard" hidden>
+  <div class="modal-content" role="dialog" style="position:fixed;left:300px;top:110px;width:520px;height:280px;background:#fff;border:1px solid #999;padding:16px;box-sizing:border-box">
+    <h4 style="margin:0 0 16px">Assistent</h4>
+    <label class="o_form_label" for="wiz_partner_0">Rechnungsadresse</label>
+    <div name="partner_invoice_id" class="o_field_widget" style="margin-top:110px"><input id="wiz_partner_0" value="Beispielkunde GmbH"></div>
+    <button type="button" id="wiz_confirm" style="margin-top:12px">Übernehmen</button>
+  </div>
+</div>
+<script>
+document.getElementById('open-wizard').addEventListener('click', () => {
+  document.getElementById('wizard').hidden = false;
+  document.getElementById('wiz-bg').hidden = false;
+});
+</script>
 </body>
 </html>

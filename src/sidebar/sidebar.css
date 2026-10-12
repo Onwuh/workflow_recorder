@@ -1,0 +1,39 @@
+html, body { width: auto; }
+body.sb { background: var(--bg); min-height: 100vh; display: flex; flex-direction: column; }
+.sb-ready { background: var(--surface); border-bottom: 1px solid var(--line); }
+.sb-ready .start { padding: 16px 18px; }
+.sb .rec-head { position: sticky; top: 0; z-index: 2; }
+
+.sb-guide { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.sb-guide-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px 4px; }
+.sb-guide-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sb-guide-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.sb-guide-head .btn { height: 32px; font-size: 13px; padding: 0 12px; flex: none; }
+.sb-tools { padding: 0 12px; display: flex; justify-content: flex-end; min-height: 8px; }
+
+.sb-steps { list-style: none; margin: 0; padding: 4px 10px 24px; display: flex; flex-direction: column; gap: 8px; }
+.sb-step {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sb-step.new { border-color: var(--accent); }
+.sb-step-head { display: flex; align-items: center; gap: 8px; }
+.sb-num {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--fg); color: #FFFFFF;
+  font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+}
+.sb-num.section { background: var(--accent); }
+.sb-text {
+  flex: 1; min-width: 0; height: 32px; border: 1px solid transparent; border-radius: 6px; padding: 0 6px;
+  background: transparent; font-size: 13px; font-weight: 500;
+}
+.sb-text:hover { border-color: var(--line); }
+.sb-text:focus { border-color: var(--accent); outline: none; background: var(--surface); }
+.sb-del { width: 32px; height: 32px; color: var(--danger); flex: none; }
+.sb-del:hover { background: #FBEAE8; }
+.sb-thumb {
+  display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 6px; border: 1px solid var(--line);
+  padding: 0; cursor: pointer;
+}
+.sb-thumb:hover { border-color: var(--accent); }
+.sb-flag { font-size: 12px; color: var(--warn-fg); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; }

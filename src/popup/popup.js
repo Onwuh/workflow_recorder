@@ -10,6 +10,8 @@
   let poller = 0;
   let lastRendered = -1;
   let thumbUrls = [];
+  let windowId = null;
+  api.windows.getCurrent().then((w) => { windowId = w.id; }, () => {});
 
   function show(view) {
     $('view-ready').hidden = view !== 'ready';
@@ -158,15 +160,7 @@
       return;
     }
     box.replaceChildren(...steps.map((s) => {
-      const thumb = el('div', { class: 'thumb' });
-      if (s.image) {
-        const url = URL.createObjectURL(s.image);
-        thumbUrls.push(url);
-        thumb.appendChild(el('img', { src: url, alt: '' }));
-      }
-      if (s.showMarker !== false && s.vw && s.vh) {
-        thumb.appendChild(el('span', { class: 'mk', style: { left: `${(s.x / s.vw) * 100}%`, top: `${(s.y / s.vh) * 100}%` } }));
-      }
+      const thumb = U.thumb(s, 'thumb', thumbUrls);
       return el('div', { class: 'last-item' }, thumb,
         el('div', { class: 'last-text' },
           el('span', { class: 'last-num', text: U.pad2(s.number) }),
@@ -208,7 +202,29 @@
     return r;
   }
 
+  /** Seitenleiste öffnen (muss direkt in der Klickbehandlung passieren). */
+  function openSidebar() {
+    try {
+      if (api.sidePanel && api.sidePanel.open && windowId != null) {
+        // Chrome: open() ohne vorheriges await, sonst gilt die Nutzeraktion als verbraucht.
+        api.sidePanel.open({ windowId }).then(() => window.close(), () => {
+          showError('Die Seitenleiste konnte nicht geöffnet werden.');
+        });
+        return;
+      }
+      if (globalThis.browser && browser.sidebarAction) {
+        // Firefox: open() muss ohne vorheriges await aus der Nutzeraktion kommen.
+        browser.sidebarAction.open().then(() => window.close(), () => showError('Die Seitenleiste konnte nicht geöffnet werden.'));
+        return;
+      }
+    } catch (_) { /* unten */ }
+    showError('Dieser Browser unterstützt keine Seitenleiste für Erweiterungen.');
+  }
+
   // ---------- Verdrahtung ----------
+
+  $('btn-sidebar').addEventListener('click', openSidebar);
+  $('btn-sidebar-rec').addEventListener('click', openSidebar);
 
   $('btn-start').addEventListener('click', start);
   $('btn-perm').addEventListener('click', requestPermission);

@@ -173,18 +173,63 @@ let pendingCaptures = 0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function captureSerialized(windowId) {
+/**
+ * Screenshot mit Mindestabstand. `around` misst direkt vor und nach der Aufnahme
+ * (Schwärzungsflächen), damit Messung und Bild so nah wie möglich beieinander liegen.
+ */
+function captureSerialized(windowId, around) {
   const run = captureChain.then(async () => {
     const wait = lastCaptureAt + CAPTURE_GAP_MS - Date.now();
     if (wait > 0) await sleep(wait);
+    const before = await around();
     try {
-      return await api.tabs.captureVisibleTab(windowId, { format: 'png' });
+      const dataUrl = await api.tabs.captureVisibleTab(windowId, { format: 'png' });
+      const after = await around();
+      return { dataUrl, before, after };
     } finally {
       lastCaptureAt = Date.now();
     }
   });
   captureChain = run.catch(() => {});
   return run;
+}
+
+/** Fragt das Content-Script nach Schwärzungsflächen. null, wenn es nicht antwortet (z. B. Seite lädt neu). */
+async function measureTab(tabId) {
+  try {
+    const r = await Promise.race([
+      api.tabs.sendMessage(tabId, { type: 'measure' }, { frameId: 0 }),
+      sleep(400).then(() => null)
+    ]);
+    return r && Array.isArray(r.rects) ? r : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Prüft die gemeldeten Flächen und rechnet sie in Bildpixel um. */
+function sanitizeRedactions(list, info, imgW, imgH) {
+  const k = imgW / info.vw;
+  const out = [];
+  const seen = new Set();
+  for (const r of Array.isArray(list) ? list.slice(0, 800) : []) {
+    if (!r || typeof r !== 'object') continue;
+    const x = num(r.x, 0, info.vw, NaN);
+    const y = num(r.y, -1e5, 1e5, NaN);
+    const w = num(r.w, 0, info.vw, NaN);
+    const h = num(r.h, 0, 1e5, NaN);
+    if (![x, y, w, h].every(Number.isFinite) || w < 1 || h < 1) continue;
+    // Auf das Bild begrenzen
+    const y1 = Math.max(0, y);
+    const y2 = Math.min(info.vh, y + h);
+    if (y2 - y1 < 1) continue;
+    const rr = { x: Math.floor(x * k), y: Math.floor(y1 * k), w: Math.ceil(w * k), h: Math.ceil((y2 - y1) * k), auto: true };
+    const key = `${rr.x},${rr.y},${rr.w},${rr.h}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(rr);
+  }
+  return out;
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -225,7 +270,6 @@ function sanitizeStepInfo(s) {
     vw,
     vh,
     dpr: num(s.dpr, 0.25, 10, 1),
-    unredacted: Math.round(num(s.unredacted, 0, 999, 0)),
     showMarker: s.kind !== 'input'
   };
 }
@@ -240,12 +284,13 @@ async function onStep(msg, sender) {
   try {
     const tab = await api.tabs.get(rec.tabId);
     if (!tab.active) return { ok: false, reason: 'inactive' };
-    const dataUrl = await captureSerialized(tab.windowId);
-    // Lädt die Seite gerade neu (Link-Navigation), ist das Schwärzungs-Overlay womöglich weg:
+    const shot = await captureSerialized(tab.windowId, () => measureTab(rec.tabId));
+    // Antwortet das Content-Script nicht (Seite lädt neu), ist die Schwärzung unsicher:
     // Schritt dann zur Prüfung markieren.
-    const after = await api.tabs.get(rec.tabId).catch(() => null);
-    const navigated = !after || after.status === 'loading';
-    const image = dataUrlToBlob(dataUrl);
+    const tabAfter = await api.tabs.get(rec.tabId).catch(() => null);
+    const navigated = !shot.before || !shot.after || !tabAfter || tabAfter.status === 'loading';
+    const image = dataUrlToBlob(shot.dataUrl);
+    const unredacted = Math.round(num(Math.max(shot.before ? shot.before.unredacted : 0, shot.after ? shot.after.unredacted : 0), 0, 999, 0));
     let imgW = Math.round(info.vw * info.dpr);
     let imgH = Math.round(info.vh * info.dpr);
     try {
@@ -254,6 +299,11 @@ async function onStep(msg, sender) {
       imgH = bmp.height;
       bmp.close();
     } catch (_) { /* Maße geschätzt */ }
+    // Ein Maßstab für beide Achsen (Gerätepixel pro CSS-Pixel). Ist der Screenshot niedriger als
+    // innerHeight, ist er abgeschnitten, nicht gestaucht: sichtbare Höhe aus dem Bild ableiten.
+    const scale = imgW / info.vw;
+    info.vh = imgH / scale;
+    info.y = Math.min(info.y, info.vh);
 
     // Aufnahme könnte inzwischen beendet worden sein.
     const now = await getState();
@@ -270,9 +320,14 @@ async function onStep(msg, sender) {
       image,
       showMarker: info.showMarker,
       annotations: [],
-      unredacted: navigated ? Math.max(1, info.unredacted) : info.unredacted,
+      // Vereinigung aus Messung vor und nach dem Screenshot, falls sich die Seite dazwischen ändert.
+      redactions: sanitizeRedactions([
+        ...(shot.before ? shot.before.rects : []),
+        ...(shot.after ? shot.after.rects : [])
+      ], info, imgW, imgH),
+      unredacted: navigated ? Math.max(1, unredacted) : unredacted,
       navigated,
-      reviewed: !navigated && info.unredacted === 0
+      reviewed: !navigated && unredacted === 0
     });
     now.count = await DB.countSteps(rec.guideId);
     await setState(now);
@@ -318,7 +373,14 @@ async function handle(msg, sender) {
     switch (msg.type) {
       case 'status': return { ok: true, rec: await getState() };
       case 'start': return start(Number.isSafeInteger(msg.tabId) ? msg.tabId : undefined);
-      case 'stop': return stop();
+      case 'stop': return stop({ openEditor: msg.openEditor !== false });
+      case 'recount': {
+        const rec = await getState();
+        if (!rec) return { ok: false };
+        rec.count = await DB.countSteps(rec.guideId);
+        await setState(rec);
+        return { ok: true, rec };
+      }
       case 'pause': return setPaused(true);
       case 'resume': return setPaused(false);
       case 'discard': return discardLast();

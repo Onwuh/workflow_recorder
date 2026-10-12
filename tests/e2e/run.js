@@ -41,7 +41,7 @@ function check(cond, msg) {
   // Erweiterungsseite (für Nachrichten und DB-Zugriff), danach die Testseite als aktiver Tab.
   const helper = await ctx.newPage();
   helper.on('console', (m) => { if (m.type() === 'error') errors.push('helper: ' + m.text()); });
-  await helper.goto(ext('src/popup/popup.html'));
+  await helper.goto(ext('src/editor/editor.html'));
   const page = await ctx.newPage();
   await page.goto(base);
   await page.bringToFront();
@@ -51,7 +51,12 @@ function check(cond, msg) {
   check(start && start.ok, 'Aufnahme startet: ' + JSON.stringify(start && (start.error || 'ok')));
   const guideId = start.rec.guideId;
 
-  const clicks = ['#confirm', '#partner_id_0', '#qty_0', '#bc', '#rowcell', '#tab', '#iconbtn', '#menu-orders'];
+  // Feldpositionen vor den Klicks (der Wizard-Button scrollt die Seite später)
+  const rects = await page.evaluate(() => ['#partner_id_0', '#email_0', '#qty_0', '#rowcell'].map((s) => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }));
+  const clicks = ['#confirm', '#partner_id_0', '#qty_0', '#bc', '#rowcell', '#tab', '#iconbtn', '#menu-orders', '#open-wizard', '#wiz_confirm'];
   for (const sel of clicks) {
     await page.click(sel);
     await page.waitForTimeout(700);
@@ -74,26 +79,42 @@ function check(cond, msg) {
   check(steps[0].unredacted === 2, `ungeschwärzte Felder gezählt (${steps[0].unredacted}, erwartet 2: Menge, Referenz)`);
 
   // Schwärzung im Bild: Pixel mitten im Kundenfeld und im E-Mail-Feld müssen #1B1D1F sein.
-  const rects = await page.evaluate(() => ['#partner_id_0', '#email_0', '#qty_0', '#rowcell'].map((s) => {
-    const r = document.querySelector(s).getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  }));
-  const px = await helper.evaluate(async ({ g, pts }) => {
-    const s = (await DB.getSteps(g))[0];
-    const bmp = await createImageBitmap(s.image);
+  // Schwärzung als Rechtecke am Schritt; im Export fest eingerechnet, gespeichertes Original unverändert.
+  const pixels = async (idx, pts, rendered) => helper.evaluate(async ({ g, idx, pts, rendered }) => {
+    const s = (await DB.getSteps(g))[idx];
+    const blob = rendered ? (await Render.renderStep(s, { marker: false })).blob : s.image;
+    const bmp = await createImageBitmap(blob);
     const c = new OffscreenCanvas(bmp.width, bmp.height);
     const ctx = c.getContext('2d');
     ctx.drawImage(bmp, 0, 0);
     const k = bmp.width / s.vw;
     return pts.map((p) => Array.from(ctx.getImageData(Math.round(p.x * k), Math.round(p.y * k), 1, 1).data));
-  }, { g: guideId, pts: rects });
+  }, { g: guideId, idx, pts, rendered });
+  const px = await pixels(0, rects, true);
+  const raw = await pixels(0, rects, false);
   const dark = (p) => p[0] === 0x1B && p[1] === 0x1D && p[2] === 0x1F;
-  check(dark(px[0]), 'Kundenfeld geschwärzt ' + px[0]);
-  check(dark(px[1]), 'E-Mail-Feld geschwärzt ' + px[1]);
+  check(dark(px[0]), 'Kundenfeld im Export geschwärzt ' + px[0]);
+  check(dark(px[1]), 'E-Mail-Feld im Export geschwärzt ' + px[1]);
   check(!dark(px[2]), 'Mengenfeld nicht geschwärzt ' + px[2]);
-  check(dark(px[3]), 'Listenzelle partner_id geschwärzt ' + px[3]);
-  const overlayLeft = await page.evaluate(() => document.querySelectorAll('wfr-redaction').length);
-  check(overlayLeft === 0, 'Overlay nach Screenshot entfernt');
+  check(dark(px[3]), 'Listenzelle partner_id im Export geschwärzt ' + px[3]);
+  check(!dark(raw[0]), 'gespeichertes Original bleibt erhalten (Schwärzung entfernbar)');
+  const nRed = await helper.evaluate((g) => DB.getSteps(g).then((s) => s[0].redactions.length), guideId);
+  check(nRed === 4, `vier Schwärzungsflächen am Schritt (Kunde, E-Mail-Widget, E-Mail-Input, Listenzelle: ${nRed})`);
+
+  // Wizard: Felder im Dialog geschwärzt, Balken der Seite dahinter nicht über dem Dialog.
+  const wiz = await page.evaluate(() => {
+    const m = document.querySelector('#wizard .modal-content').getBoundingClientRect();
+    const f = document.querySelector('#partner_id_0').getBoundingClientRect();
+    const e = document.querySelector('#email_0').getBoundingClientRect();
+    const w = document.querySelector('#wiz_partner_0').getBoundingClientRect();
+    const mid = (a, b) => ({ x: (Math.max(a.left, b.left) + Math.min(a.right, b.right)) / 2, y: (Math.max(a.top, b.top) + Math.min(a.bottom, b.bottom)) / 2 });
+    return [mid(m, f), mid(m, e), { x: w.left + w.width / 2, y: w.top + w.height / 2 }, { x: f.left + 10, y: f.top + f.height / 2 }];
+  });
+  const wpx = await pixels(clicks.length - 1, wiz, true);
+  check(!dark(wpx[0]) && !dark(wpx[1]), `kein Balken über dem Wizard (${wpx[0]} / ${wpx[1]})`);
+  check(dark(wpx[2]), 'Feld im Wizard geschwärzt ' + wpx[2]);
+  check(dark(wpx[3]), 'sichtbarer Teil des Feldes neben dem Wizard bleibt geschwärzt ' + wpx[3]);
+  await page.evaluate(() => { document.getElementById('wizard').hidden = true; document.getElementById('wiz-bg').hidden = true; });
 
   // Synthetische Ereignisse der Seite (isTrusted = false) dürfen keine Schritte erzeugen.
   await page.evaluate(() => {
@@ -142,17 +163,30 @@ function check(cond, msg) {
   await editor.mouse.move(box.x + 120, box.y + 60, { steps: 5 });
   await editor.mouse.up();
   await editor.waitForTimeout(600);
+  const red0 = 4;
   const red = await editor.evaluate(async () => {
     const s = Editor.state.steps[0];
     const fresh = await DB.getStep(s.id);
-    const bmp = await createImageBitmap(fresh.image);
+    const k = fresh.imgW / document.getElementById('ed-stage').getBoundingClientRect().width;
+    const out = (await Render.renderStep(fresh, { marker: false })).blob;
+    const bmp = await createImageBitmap(out);
     const c = new OffscreenCanvas(bmp.width, bmp.height);
     const g = c.getContext('2d');
     g.drawImage(bmp, 0, 0);
-    const k = bmp.width / document.getElementById('ed-stage').getBoundingClientRect().width;
-    return Array.from(g.getImageData(Math.round(70 * k), Math.round(40 * k), 1, 1).data);
+    return { n: fresh.redactions.length, px: Array.from(g.getImageData(Math.round(70 * k), Math.round(40 * k), 1, 1).data) };
   });
-  check(dark(red), 'manuelle Schwärzung fest im gespeicherten Bild ' + red);
+  check(red.n === red0 + 1 && dark(red.px), `manuelle Schwärzung gespeichert und im Export deckend (${red.n}, ${red.px})`);
+  await editor.screenshot({ path: path.join(OUT, 'editor-schwaerzen.png') });
+
+  // Schwärzung per Klick wieder entfernen
+  await editor.mouse.click(box.x + 70, box.y + 40);
+  await editor.waitForTimeout(400);
+  const afterRemove = await editor.evaluate(async () => (await DB.getStep(Editor.state.steps[0].id)).redactions.length);
+  check(afterRemove === red0, `Schwärzung per Klick entfernt (${afterRemove})`);
+  await editor.click('#ed-undo');
+  await editor.waitForTimeout(300);
+  const afterUndo = await editor.evaluate(async () => (await DB.getStep(Editor.state.steps[0].id)).redactions.length);
+  check(afterUndo === red0 + 1, 'Entfernen lässt sich rückgängig machen');
 
   // Zuschneiden
   const before = await editor.evaluate(() => ({ w: Editor.state.steps[0].imgW }));
@@ -182,6 +216,7 @@ function check(cond, msg) {
   check(await editor.locator('#ex-warn').isVisible(), 'Export warnt vor ungeschwärzten Feldern');
   await editor.locator('.fmt').nth(2).click();
   await editor.waitForTimeout(1500);
+  check(!(await editor.locator('#ex-crop').isChecked()), 'Odoo: Zuschneiden nicht voreingestellt');
   const size = await editor.locator('#ex-size').textContent();
   check(/KB|MB/.test(size), 'Odoo-Größenschätzung ' + size);
   await editor.screenshot({ path: path.join(OUT, 'export-odoo.png') });
@@ -194,12 +229,14 @@ function check(cond, msg) {
     const md = await Exporter.markdown(id, { marker: true, crop: false });
     const mdEntries = await Zip.read(md);
     const mdText = new TextDecoder().decode(await mdEntries.get('anleitung.md').read());
+    const pdf = await Exporter.pdf(id, { marker: true, crop: false, cover: false });
+    const pdfB64 = await new Promise((r) => { const f = new FileReader(); f.onload = () => r(f.result.split(',')[1]); f.readAsDataURL(pdf); });
     const bak = await Exporter.backup(id);
     const newId = await Exporter.importProject(bak);
     const a = await DB.getSteps(id);
     const b = await DB.getSteps(newId);
     return {
-      html, odooHtml: odoo.html, mdText, mdFiles: Array.from(mdEntries.keys()),
+      pdfB64, html, odooHtml: odoo.html, mdText, mdFiles: Array.from(mdEntries.keys()),
       roundtrip: a.length === b.length && a.every((s, i) => s.text === b[i].text && s.type === b[i].type && (s.imgW || 0) === (b[i].imgW || 0))
     };
   });
@@ -212,6 +249,18 @@ function check(cond, msg) {
   check(results.mdText.includes('\\<script\\>') && results.mdFiles.some((f) => f.startsWith('bilder/')), 'Markdown escaped, Bilder im ZIP');
   check(results.roundtrip, 'Projektsicherung: Export und Import ergeben dieselben Schritte');
   fs.writeFileSync(path.join(OUT, 'export.html'), results.html);
+  const pdfPath = path.join(OUT, 'export.pdf');
+  fs.writeFileSync(pdfPath, Buffer.from(results.pdfB64, 'base64'));
+  const { execFileSync } = require('child_process');
+  let pdfText = '';
+  let pdfInfo = '';
+  try {
+    pdfText = execFileSync('pdftotext', ['-layout', pdfPath, '-'], { encoding: 'utf8' });
+    pdfInfo = execFileSync('pdfinfo', [pdfPath], { encoding: 'utf8' });
+  } catch (e) { pdfText = 'FEHLER ' + e.message; }
+  check(/Pages:\s+\d+/.test(pdfInfo) && pdfText.includes('Wähle bei „Kunde“ einen Eintrag aus') && pdfText.includes('Zweiter Teil'),
+    'PDF ist gültig und enthält die Schritte mit Umlauten und Anführungszeichen');
+  try { execFileSync('pdftoppm', ['-png', '-r', '60', '-f', '1', '-l', '2', pdfPath, path.join(OUT, 'pdf-seite')]); } catch (_) { /* nur Ansicht */ }
 
   // Exportierte Datei öffnen: CSP-Hashes müssen passen (Stil greift, kein CSP-Fehler).
   const exp = await ctx.newPage();
@@ -230,6 +279,15 @@ function check(cond, msg) {
   await pv.waitForTimeout(1200);
   await pv.screenshot({ path: path.join(OUT, 'vorschau.png'), fullPage: false });
   check(await pv.locator('.g-step').count() >= 1, 'Vorschau rendert Schritte');
+
+  // Seitenleiste zeigt die Schritte der letzten Anleitung
+  const sb = await ctx.newPage();
+  await sb.setViewportSize({ width: 380, height: 900 });
+  await sb.goto(ext('src/sidebar/sidebar.html'));
+  await sb.waitForTimeout(1000);
+  const sbCount = await sb.locator('.sb-step').count();
+  check(sbCount >= 5, `Seitenleiste listet Schritte (${sbCount})`);
+  await sb.screenshot({ path: path.join(OUT, 'seitenleiste.png') });
 
   // Übersicht und Einstellungen
   const ov = await ctx.newPage();

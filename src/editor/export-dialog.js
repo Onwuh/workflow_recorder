@@ -2,14 +2,14 @@
 'use strict';
 
 (() => {
-  const { api, el } = U;
+  const { el } = U;
   const $ = (id) => document.getElementById(id);
   const dlg = $('export');
   if (!dlg) return;
 
   const FORMATS = [
     { id: 'html', label: 'HTML-Datei', hint: 'Eine Datei, öffnet in jedem Browser', cta: 'HTML herunterladen', badge: 'HTML' },
-    { id: 'pdf', label: 'PDF', hint: 'Zum Anhängen und Drucken', cta: 'PDF erstellen', badge: 'PDF' },
+    { id: 'pdf', label: 'PDF', hint: 'Zum Anhängen und Drucken', cta: 'PDF herunterladen', badge: 'PDF' },
     { id: 'odoo', label: 'Odoo Wissen', hint: 'Kopieren und in einen Artikel einfügen', cta: 'In Zwischenablage kopieren', badge: 'Odoo' },
     { id: 'md', label: 'Markdown', hint: 'Text plus Bilderordner als ZIP', cta: 'ZIP herunterladen', badge: 'MD' }
   ];
@@ -18,7 +18,8 @@
   let picked = 'html';
   let busy = false;
   let odooPrep = null; // { key, promise }
-  const cropByFormat = { html: false, pdf: false, odoo: true, md: false };
+  // Zuschneiden ist nirgends voreingestellt: zugeschnittene Bilder wirken in Odoo Wissen gezoomt.
+  const cropByFormat = { html: false, pdf: false, odoo: false, md: false };
 
   function opts() {
     return { cover: $('ex-cover').checked, marker: $('ex-marker').checked, crop: $('ex-crop').checked };
@@ -89,6 +90,7 @@
 
   function prepareOdoo() {
     const o = opts();
+    $('ex-size-label').textContent = o.crop ? 'Bilder zugeschnitten, max. 1000 px, WebP' : 'Bilder max. 1000 px breit, WebP';
     const key = JSON.stringify([o.marker, o.crop]);
     if (odooPrep && odooPrep.key === key) return odooPrep.promise;
     $('ex-size').textContent = '…';
@@ -145,9 +147,9 @@
         U.download(blob, `${title}.html`);
         status('HTML-Datei gespeichert.');
       } else if (picked === 'pdf') {
-        const q = new URLSearchParams({ guide: String(guide().id), print: '1', marker: o.marker ? '1' : '0', crop: o.crop ? '1' : '0', cover: o.cover ? '1' : '0' });
-        await api.tabs.create({ url: api.runtime.getURL(`src/export/preview.html?${q}`) });
-        status('Druckansicht geöffnet. Dort „Als PDF speichern“ wählen.');
+        const blob = await Exporter.pdf(guide().id, o, progress);
+        U.download(blob, `${title}.pdf`);
+        status('PDF-Datei gespeichert.');
       } else if (picked === 'md') {
         const blob = await Exporter.markdown(guide().id, o, progress);
         U.download(blob, `${title} (Markdown).zip`);

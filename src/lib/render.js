@@ -1,7 +1,8 @@
 /* Bildbearbeitung auf Canvas.
-   - Schwärzen und Zuschneiden werden fest ins gespeicherte Bild gerechnet (das Original wird ersetzt).
-   - Klickmarker und Pfeile bleiben Vektordaten und werden erst beim Export ins Bild gezeichnet.
-   Koordinaten von Annotationen und Rechtecken sind Bildpixel. */
+   - Schwärzungen, Klickmarker und Pfeile sind Vektordaten am Schritt (Bildpixel) und lassen sich im Editor
+     entfernen. Beim Export (und in der Projektsicherung) werden sie fest ins Bild gerechnet: deckend,
+     kein Weichzeichner, das Original gelangt nie in eine exportierte Datei.
+   - Zuschneiden ersetzt das gespeicherte Bild. */
 'use strict';
 
 // eslint-disable-next-line no-unused-vars
@@ -144,8 +145,12 @@ var Render = (() => {
       g.drawImage(bmp, region.x, region.y, region.w, region.h, 0, 0, c.width, c.height);
       g.setTransform(k, 0, 0, k, -region.x * k, -region.y * k);
       const s = bmp.width / (step.vw || bmp.width) || 1;
-      for (const a of step.annotations || []) {
-        if (a && a.type === 'arrow') drawArrow(g, a, s);
+      // Schwärzung immer zuerst und deckend.
+      drawRedactions(g, step.redactions, s);
+      if (opts.annotations !== false) {
+        for (const a of step.annotations || []) {
+          if (a && a.type === 'arrow') drawArrow(g, a, s);
+        }
       }
       if (opts.marker && step.showMarker !== false) {
         const { cx, cy } = markerPos({ ...step, imgW: bmp.width, imgH: bmp.height });
@@ -158,22 +163,14 @@ var Render = (() => {
     }
   }
 
-  /** Schwärzt ein Rechteck dauerhaft (deckend, kein Weichzeichner). Liefert ein neues PNG. */
-  async function bakeRedaction(step, rect) {
-    const bmp = await bitmap(step.image);
-    try {
-      const r = clampRect(rect, bmp.width, bmp.height);
-      if (r.w < 2 || r.h < 2) return null;
-      const c = canvas(bmp.width, bmp.height);
-      const g = c.getContext('2d');
-      g.drawImage(bmp, 0, 0);
-      g.fillStyle = REDACT;
-      roundRect(g, r.x, r.y, r.w, r.h, 3 * scaleOf(step));
+  function drawRedactions(g, list, s) {
+    g.save();
+    g.fillStyle = REDACT;
+    for (const r of list || []) {
+      roundRect(g, r.x, r.y, r.w, r.h, 3 * s);
       g.fill();
-      return await toBlob(c, 'image/png');
-    } finally {
-      bmp.close();
     }
+    g.restore();
   }
 
   /** Schneidet dauerhaft zu. Liefert die geänderten Schrittfelder (Bild, Maße, Klickpunkt, Pfeile). */
@@ -194,8 +191,11 @@ var Render = (() => {
       const annotations = (step.annotations || []).map((a) => ({
         ...a, x1: a.x1 - r.x, y1: a.y1 - r.y, x2: a.x2 - r.x, y2: a.y2 - r.y
       }));
+      const redactions = (step.redactions || [])
+        .map((q) => ({ ...clampRect({ x: q.x - r.x, y: q.y - r.y, w: q.w, h: q.h }, r.w, r.h), auto: !!q.auto }))
+        .filter((q) => q.w > 0 && q.h > 0);
       return {
-        image, imgW: r.w, imgH: r.h, vw, vh,
+        image, imgW: r.w, imgH: r.h, vw, vh, redactions,
         x: Math.max(0, Math.min(vw, x)), y: Math.max(0, Math.min(vh, y)),
         showMarker: inside ? step.showMarker : false,
         annotations
@@ -218,5 +218,21 @@ var Render = (() => {
     }
   }
 
-  return { renderStep, bakeRedaction, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
+  /** Bild auf weißem Grund als JPEG (für PDF; Transparenz würde sonst schwarz). */
+  async function toJpeg(blob, { maxWidth = 0, quality = 0.9 } = {}) {
+    const bmp = await bitmap(blob);
+    try {
+      const k = maxWidth && bmp.width > maxWidth ? maxWidth / bmp.width : 1;
+      const c = canvas(bmp.width * k, bmp.height * k);
+      const g = c.getContext('2d');
+      g.fillStyle = '#FFFFFF';
+      g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(bmp, 0, 0, c.width, c.height);
+      return { blob: await toBlob(c, 'image/jpeg', quality), width: c.width, height: c.height };
+    } finally {
+      bmp.close();
+    }
+  }
+
+  return { toJpeg, renderStep, bakeCrop, reencode, clickRegion, markerPos, scaleOf, clampRect, REC };
 })();
