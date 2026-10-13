@@ -101,6 +101,10 @@ Der Kurzbefehl ⌥⇧R (Alt+Shift+R) lässt sich in Chrome unter `chrome://exten
 
 Bekannte Grenzen: Inhalte in iframes werden von der Auto-Schwärzung nicht erfasst. Die Messung läuft im Content-Script; eine Seite, die ihr DOM gezielt manipuliert, könnte die Erkennung umgehen. Deshalb bleiben die Prüfung im Editor und die Exportwarnung nötig.
 
+## Datenschutz
+
+Die Erweiterung erhebt und überträgt keine Daten. Details: [PRIVACY.md](PRIVACY.md).
+
 ## Entwicklung
 
 ```
