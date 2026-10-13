@@ -79,7 +79,36 @@ async function hasHostPermission(url) {
 
 // ---------- Aktionen ----------
 
-async function start(tabId) {
+/**
+ * Einfügestelle in einer bestehenden Anleitung bestimmen.
+ * afterStepId 0 = ganz am Anfang. Neue Schritte bekommen Reihenfolgewerte zwischen Anker und Nachfolger.
+ */
+async function insertPoint(guideId, afterStepId) {
+  const guide = await DB.getGuide(guideId);
+  if (!guide) return null;
+  const steps = await DB.getSteps(guideId);
+  let idx = -1;
+  if (afterStepId) {
+    idx = steps.findIndex((x) => x.id === afterStepId);
+    if (idx < 0) return null;
+  }
+  const after = idx >= 0 ? steps[idx].order : (steps.length ? steps[0].order - 1 : 0);
+  const next = idx + 1 < steps.length ? steps[idx + 1].order : null;
+  // Sichtbare Nummer des Ankers (Abschnitte zählen nicht).
+  const number = steps.slice(0, idx + 1).filter((x) => x.type !== 'section').length;
+  return { anchor: after, after, next, number, title: String(guide.title || '').slice(0, 120) };
+}
+
+function nextInsertOrder(ins) {
+  return ins.next == null ? ins.after + 1 : ins.after + (ins.next - ins.after) / 2;
+}
+
+async function getPendingInsert() {
+  const r = await api.storage.session.get('pendingInsert');
+  return r.pendingInsert || null;
+}
+
+async function start(tabId, target) {
   const existing = await getState();
   if (existing) return { ok: false, error: 'Es läuft bereits eine Aufnahme.' };
 
@@ -94,6 +123,14 @@ async function start(tabId) {
     return { ok: false, error: 'permission' };
   }
 
+  // Ohne ausdrückliches Ziel gilt eine im Editor vorgemerkte Einfügestelle.
+  if (!target) target = await getPendingInsert();
+  let insert = null;
+  if (target && target.guideId) {
+    insert = await insertPoint(target.guideId, target.afterStepId || 0);
+    if (!insert) return { ok: false, error: 'Die Anleitung oder der Schritt zum Einfügen existiert nicht mehr.' };
+  }
+
   // Content-Script nachladen, falls der Tab schon vor der Installation offen war.
   try {
     await api.scripting.executeScript({ target: { tabId: tab.id, frameIds: [0] }, files: ['src/content.js'] });
@@ -101,9 +138,10 @@ async function start(tabId) {
     return { ok: false, error: 'Auf dieser Seite lässt der Browser keine Erweiterungen zu.' };
   }
 
-  const guide = await DB.addGuide({ title: guideTitle() });
+  const guideId = insert ? target.guideId : (await DB.addGuide({ title: guideTitle() })).id;
+  await api.storage.session.remove('pendingInsert');
   const rec = {
-    guideId: guide.id,
+    guideId,
     tabId: tab.id,
     windowId: tab.windowId,
     startedAt: Date.now(),
@@ -111,7 +149,9 @@ async function start(tabId) {
     paused: false,
     pausedMs: 0,
     pauseStart: 0,
-    host: safeHost(tab.url)
+    host: safeHost(tab.url),
+    insert,       // null = neue Anleitung, sonst Einfügen in bestehende
+    added: []     // in dieser Aufnahme erzeugte Schritte { id, order }
   };
   await setState(rec);
   await notifyTab(tab.id, await contentState(rec));
@@ -128,12 +168,12 @@ async function stop({ openEditor = true } = {}) {
   await setState(null);
   await notifyTab(rec.tabId, await contentState(null));
   const count = await DB.countSteps(rec.guideId).catch(() => 0);
-  if (count === 0) {
+  if (count === 0 && !rec.insert) {
     // Leere Aufnahmen nicht als Anleitung behalten.
     await DB.deleteGuide(rec.guideId).catch(() => {});
     return { ok: true, empty: true };
   }
-  if (openEditor) {
+  if (openEditor && (count > 0)) {
     await api.tabs.create({ url: api.runtime.getURL(`src/editor/editor.html?guide=${rec.guideId}`) });
   }
   return { ok: true, guideId: rec.guideId };
@@ -159,8 +199,24 @@ async function setPaused(paused) {
 async function discardLast() {
   const rec = await getState();
   if (!rec) return { ok: false };
-  await DB.deleteLastStep(rec.guideId);
-  rec.count = await DB.countSteps(rec.guideId);
+  const added = rec.added || [];
+  const last = added.pop();
+  if (last) await DB.deleteStep(last.id).catch(() => {});
+  if (rec.insert) rec.insert.after = added.length ? added[added.length - 1].order : rec.insert.anchor;
+  rec.added = added;
+  rec.count = added.length;
+  await setState(rec);
+  return { ok: true, rec };
+}
+
+/** Nach Löschen in der Seitenleiste: nur noch vorhandene Schritte zählen. */
+async function recount() {
+  const rec = await getState();
+  if (!rec) return { ok: false };
+  const alive = new Set((await DB.getSteps(rec.guideId)).map((x) => x.id));
+  rec.added = (rec.added || []).filter((a) => alive.has(a.id));
+  rec.count = rec.added.length;
+  if (rec.insert) rec.insert.after = rec.added.length ? rec.added[rec.added.length - 1].order : rec.insert.anchor;
   await setState(rec);
   return { ok: true, rec };
 }
@@ -309,8 +365,10 @@ async function onStep(msg, sender) {
     const now = await getState();
     if (!now || now.guideId !== rec.guideId || now.paused) return { ok: false, reason: 'stopped' };
 
-    await DB.addStep({
+    const order = now.insert ? nextInsertOrder(now.insert) : undefined;
+    const saved = await DB.addStep({
       guideId: rec.guideId,
+      order,
       type: 'step',
       kind: info.kind,
       text: info.text,
@@ -329,7 +387,9 @@ async function onStep(msg, sender) {
       navigated,
       reviewed: !navigated && unredacted === 0
     });
-    now.count = await DB.countSteps(rec.guideId);
+    now.added = (now.added || []).concat({ id: saved.id, order: saved.order });
+    if (now.insert) now.insert.after = saved.order;
+    now.count = now.added.length;
     await setState(now);
     return { ok: true, count: now.count };
   } catch (e) {
@@ -371,16 +431,28 @@ async function handle(msg, sender) {
 
   if (fromExtensionPage(sender)) {
     switch (msg.type) {
-      case 'status': return { ok: true, rec: await getState() };
-      case 'start': return start(Number.isSafeInteger(msg.tabId) ? msg.tabId : undefined);
-      case 'stop': return stop({ openEditor: msg.openEditor !== false });
-      case 'recount': {
-        const rec = await getState();
-        if (!rec) return { ok: false };
-        rec.count = await DB.countSteps(rec.guideId);
-        await setState(rec);
-        return { ok: true, rec };
+      case 'status': return { ok: true, rec: await getState(), pendingInsert: await getPendingInsert() };
+      case 'start': {
+        const tabId = Number.isSafeInteger(msg.tabId) ? msg.tabId : undefined;
+        const target = Number.isSafeInteger(msg.guideId) && msg.guideId > 0
+          ? { guideId: msg.guideId, afterStepId: Number.isSafeInteger(msg.afterStepId) && msg.afterStepId > 0 ? msg.afterStepId : 0 }
+          : (msg.newGuide === true ? { guideId: 0 } : undefined);
+        return start(tabId, target);
       }
+      case 'set-insert': {
+        if (!Number.isSafeInteger(msg.guideId) || msg.guideId <= 0) return { ok: false };
+        const afterStepId = Number.isSafeInteger(msg.afterStepId) && msg.afterStepId > 0 ? msg.afterStepId : 0;
+        const ins = await insertPoint(msg.guideId, afterStepId);
+        if (!ins) return { ok: false };
+        const pendingInsert = { guideId: msg.guideId, afterStepId, number: ins.number, title: ins.title };
+        await api.storage.session.set({ pendingInsert });
+        return { ok: true, pendingInsert };
+      }
+      case 'clear-insert':
+        await api.storage.session.remove('pendingInsert');
+        return { ok: true };
+      case 'stop': return stop({ openEditor: msg.openEditor !== false });
+      case 'recount': return recount();
       case 'pause': return setPaused(true);
       case 'resume': return setPaused(false);
       case 'discard': return discardLast();
@@ -401,13 +473,59 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-api.commands.onCommand.addListener(async (command) => {
+// ---------- Symbol und Seitenleiste ----------
+
+// Zwischengespeichert, weil sidebarAction.open()/sidePanel.open() nur synchron in der Nutzeraktion erlaubt sind.
+let openSidebarSetting = Settings.DEFAULTS.openSidebar;
+
+async function applyActionBehavior() {
+  const s = await Settings.get();
+  openSidebarSetting = s.openSidebar;
+  try {
+    // Ohne Popup löst der Klick aufs Symbol die Seitenleiste aus.
+    await api.action.setPopup({ popup: s.openSidebar ? '' : 'src/popup/popup.html' });
+    if (api.sidePanel && api.sidePanel.setPanelBehavior) {
+      await api.sidePanel.setPanelBehavior({ openPanelOnActionClick: s.openSidebar });
+    }
+  } catch (_) { /* ältere Browser: Popup bleibt */ }
+}
+
+/** Seitenleiste öffnen, synchron aus einer Nutzeraktion heraus aufrufen. */
+function openSidebarNow(windowId) {
+  try {
+    if (api.sidePanel && api.sidePanel.open && windowId != null) {
+      api.sidePanel.open({ windowId }).catch(() => {});
+    } else if (globalThis.browser && browser.sidebarAction) {
+      browser.sidebarAction.open().catch(() => {});
+    }
+  } catch (_) { /* nicht unterstützt */ }
+}
+
+// Firefox: ohne Popup kommt der Klick hier an.
+api.action.onClicked.addListener((tab) => {
+  if (globalThis.browser && browser.sidebarAction) {
+    try { browser.sidebarAction.toggle(); } catch (_) { /* ignorieren */ }
+  } else if (api.sidePanel && api.sidePanel.open && tab) {
+    api.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+  }
+});
+
+api.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.settings) applyActionBehavior();
+});
+api.runtime.onInstalled.addListener(() => applyActionBehavior());
+if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => applyActionBehavior());
+applyActionBehavior();
+
+api.commands.onCommand.addListener(async (command, tab) => {
   if (command !== 'toggle-recording') return;
+  // Vor jedem await: sonst gilt die Nutzeraktion als verbraucht.
+  if (openSidebarSetting) openSidebarNow(tab && tab.windowId);
   const rec = await getState();
   if (rec) {
-    await stop();
+    await stop({ openEditor: !openSidebarSetting });
   } else {
-    const r = await start();
+    const r = await start(tab && tab.id);
     if (!r.ok && r.error === 'permission') {
       // Ohne Popup kann keine Berechtigung angefragt werden, Einstellungen öffnen.
       api.runtime.openOptionsPage();

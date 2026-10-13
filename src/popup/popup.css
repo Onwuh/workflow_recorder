@@ -85,3 +85,10 @@ body { background: var(--surface); }
   font-size: 13px; color: var(--fg);
 }
 .sidebar-cta:hover { background: var(--bg); }
+
+.pending {
+  font-size: 13px; line-height: 1.45; color: var(--fg-2); background: var(--accent-soft);
+  border-radius: 8px; padding: 10px 12px;
+}
+.pending .btn-link.inline { color: var(--accent); margin-left: 4px; }
+.rec-insert { margin: 0; font-size: 12px; color: #C9CBCE; line-height: 1.4; }

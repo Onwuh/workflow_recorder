@@ -37,3 +37,16 @@ body.sb { background: var(--bg); min-height: 100vh; display: flex; flex-directio
 }
 .sb-thumb:hover { border-color: var(--accent); }
 .sb-flag { font-size: 12px; color: var(--warn-fg); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; }
+
+.pending {
+  font-size: 13px; line-height: 1.45; color: var(--fg-2); background: var(--accent-soft);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+}
+.pending .btn-link.inline { color: var(--accent); margin-left: 4px; }
+.rec-insert { margin: 0; font-size: 12px; color: #C9CBCE; line-height: 1.4; }
+.sb-step.added { border-color: var(--accent); }
+.sb-insert-here {
+  align-self: flex-start; border: 1px dashed var(--line-input); background: transparent; border-radius: 6px;
+  font-size: 12px; color: var(--fg-2); min-height: 30px; padding: 0 10px;
+}
+.sb-insert-here:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }

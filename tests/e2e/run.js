@@ -413,6 +413,55 @@ function check(cond, msg) {
   const st = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
   check(st && st.ok && st.rec === null, 'kein Aufnahmezustand übrig');
 
+  // ---------- Schritte einfügen ----------
+  await page.bringToFront();
+  const insBefore = await helper.evaluate((g) => DB.getSteps(g).then((s) => s.map((x) => ({ id: x.id, text: x.text }))), guideId);
+  const anchor = insBefore[1];
+  const ins = await helper.evaluate(({ t, g, a }) => chrome.runtime.sendMessage({ type: 'start', tabId: t, guideId: g, afterStepId: a }), { t: tabId, g: guideId, a: anchor.id });
+  check(ins && ins.ok && ins.rec.insert && ins.rec.guideId === guideId, 'Einfügen in bestehende Anleitung startet');
+  await page.click('#tab');
+  await page.waitForTimeout(700);
+  await page.click('#iconbtn');
+  await page.waitForTimeout(900);
+  const sbIns = await ctx.newPage();
+  await sbIns.goto(ext('src/sidebar/sidebar.html'));
+  await sbIns.waitForTimeout(800);
+  check((await sbIns.locator('#sb-insert').textContent()).includes('nach Schritt'), 'Seitenleiste zeigt Einfügeposition');
+  check(await sbIns.locator('.sb-step.added').count() === 2, 'eingefügte Schritte markiert');
+  await sbIns.screenshot({ path: path.join(OUT, 'seitenleiste-einfuegen.png') });
+  await sbIns.close();
+  await page.bringToFront();
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop', openEditor: false }));
+  const insAfter = await helper.evaluate((g) => DB.getSteps(g).then((s) => s.map((x) => ({ id: x.id, text: x.text }))), guideId);
+  check(insAfter.length === insBefore.length + 2, `zwei Schritte eingefügt (${insBefore.length} → ${insAfter.length})`);
+  check(insAfter[1].id === anchor.id && insAfter[2].text === 'Öffne den Reiter „Auftragszeilen“' && insAfter[3].text === 'Klicke auf „Aktion“' &&
+    insAfter[4].id === insBefore[2].id, 'neue Schritte stehen direkt nach dem gewählten Schritt');
+
+  // Vorgemerkte Einfügestelle (aus dem Editor), Verwerfen löscht nur den eingefügten Schritt
+  const pend = await helper.evaluate(({ g, a }) => chrome.runtime.sendMessage({ type: 'set-insert', guideId: g, afterStepId: a }), { g: guideId, a: insAfter[0].id });
+  check(pend && pend.ok && pend.pendingInsert.number === 1, 'Einfügestelle vorgemerkt');
+  await page.bringToFront();
+  const st2 = await helper.evaluate((t) => chrome.runtime.sendMessage({ type: 'start', tabId: t }), tabId);
+  check(st2.ok && st2.rec.insert && st2.rec.guideId === guideId, 'Start nutzt vorgemerkte Einfügestelle');
+  await page.click('#confirm');
+  await page.waitForTimeout(900);
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'discard' }));
+  const stopped = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop', openEditor: false }));
+  const insAfter2 = await helper.evaluate((g) => DB.getSteps(g).then((s) => s.map((x) => x.id)), guideId);
+  check(stopped.ok && JSON.stringify(insAfter2) === JSON.stringify(insAfter.map((x) => x.id)), 'Verwerfen entfernt nur den eingefügten Schritt, Anleitung bleibt');
+  const st3 = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
+  check(!st3.pendingInsert, 'vorgemerkte Einfügestelle verbraucht');
+
+  // Symbol öffnet standardmäßig die Seitenleiste (kein Popup), abschaltbar
+  const popupDefault = await helper.evaluate(() => chrome.action.getPopup({}));
+  const panel = await helper.evaluate(() => chrome.sidePanel.getPanelBehavior());
+  check(popupDefault === '' && panel.openPanelOnActionClick === true, 'Klick aufs Symbol öffnet die Seitenleiste');
+  await helper.evaluate(() => Settings.set({ openSidebar: false }));
+  await helper.waitForTimeout(500);
+  const popupOff = await helper.evaluate(() => chrome.action.getPopup({}));
+  check(popupOff.endsWith('src/popup/popup.html'), 'abgeschaltet: Popup wieder aktiv');
+  await helper.evaluate(() => Settings.set({ openSidebar: true }));
+
   check(errors.length === 0, 'keine Fehler in Erweiterungsseiten ' + JSON.stringify(errors));
   await ctx.close();
   server.close();

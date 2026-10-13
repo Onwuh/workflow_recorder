@@ -852,6 +852,14 @@ var Editor = (() => {
     $('ed-undo').addEventListener('click', undo);
     $('ed-delete').addEventListener('click', deleteCurrent);
     $('ed-up').addEventListener('click', () => move(-1));
+    $('ed-insert').addEventListener('click', async () => {
+      const s = current();
+      if (!s) return;
+      await flushSaves();
+      const r = await U.send({ type: 'set-insert', guideId: S.guide.id, afterStepId: s.id }).catch(() => null);
+      if (!r || !r.ok) { U.toast('Einfügen konnte nicht vorgemerkt werden.', { error: true }); return; }
+      U.toast(`Vorgemerkt: Neue Schritte kommen nach Schritt ${r.pendingInsert.number || '–'}. Wechsle zum Tab mit der Anwendung und starte die Aufnahme über das Symbol oder ${U.isMac() ? '⌥⇧R' : 'Alt+Shift+R'}.`, { ms: 9000 });
+    });
     $('ed-down').addEventListener('click', () => move(1));
     $('ed-add-section').addEventListener('click', addSection);
     $('ed-crop-apply').addEventListener('click', applyCrop);

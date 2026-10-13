@@ -10,6 +10,7 @@ Browser-Erweiterung für Chrome und Firefox, die Klick-Abläufe aufzeichnet und 
 - Eingabewerte erscheinen nie im Schritttext.
 - Tastatureingaben als eigener Schritt sind optional.
 - Während der Aufnahme lässt sich der letzte Schritt verwerfen.
+- Schritte nachträglich einfügen: In der Seitenleiste „Ab hier Schritte aufnehmen“ an einem Schritt, oder im Editor „Schritte danach aufnehmen“ (vormerken, dann im Tab der Anwendung die Aufnahme starten). Neue Schritte landen direkt hinter dem gewählten Schritt.
 
 ## Schwärzung
 
@@ -82,7 +83,7 @@ Chrome und Firefox brauchen unterschiedliche Manifeste (Service Worker und `side
 2. Wichtig: In Firefox sind Host-Berechtigungen unter Manifest V3 optional. Nach der Installation unter `about:addons` → Workflow Recorder → „Berechtigungen“ den Zugriff auf alle Websites erlauben. Alternativ zeigt das Popup einen Button „Zugriff erlauben“.
 3. Für eine dauerhafte Installation muss das Add-on signiert werden (`web-ext sign`).
 
-**Seitenleiste:** Über das Seitenleisten-Symbol im Popup bleibt der Workflow neben der Seite offen. Dort lässt sich die Aufnahme steuern, und jeder Schritt erscheint sofort mit Screenshot zum Prüfen: Text ändern, löschen, im Editor öffnen.
+**Seitenleiste:** Ein Klick auf das Erweiterungssymbol (und der Kurzbefehl) öffnet standardmäßig die Seitenleiste statt des Popups; abschaltbar in den Einstellungen. Der Workflow bleibt neben der Seite offen. Dort lässt sich die Aufnahme steuern, und jeder Schritt erscheint sofort mit Screenshot zum Prüfen: Text ändern, löschen, im Editor öffnen.
 
 Der Kurzbefehl ⌥⇧R (Alt+Shift+R) lässt sich in Chrome unter `chrome://extensions/shortcuts`, in Firefox unter `about:addons` → Zahnrad → „Tastenkombinationen verwalten“ ändern.
 
@@ -106,6 +107,7 @@ Bekannte Grenzen: Inhalte in iframes werden von der Auto-Schwärzung nicht erfas
 npm test            # Unit-Tests (ZIP, Projektprüfung)
 npm run lint        # ESLint
 npm run e2e         # Ende-zu-Ende-Test in Chromium mit Playwright
+npm run e2e:align   # Ausrichtung Schwärzung/Klickpunkt im echten Fenster (Xvfb)
 npm run build       # dist/chrome, dist/firefox und ZIP-Pakete
 npm run lint:firefox  # Firefox-Paket mit web-ext prüfen
 ```

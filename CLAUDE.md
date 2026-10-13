@@ -58,10 +58,12 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Berechtigungen: `storage`, `tabs`, `scripting`, `unlimitedStorage`, Chrome zusätzlich `sidePanel`, Host `<all_urls>`. In Firefox sind Host-Berechtigungen unter MV3 optional und müssen nach der Installation in den Add-on-Einstellungen erteilt werden. Das gehört in die Installationsanleitung.
 - Kurzbefehl über `commands`: `Alt+Shift+R`.
 - `sidePanel.open()` (Chrome) und `sidebarAction.open()` (Firefox) nur direkt in der Klickbehandlung aufrufen, ohne vorheriges `await`.
+- Einstellung `openSidebar` (Standard an): `action.setPopup('')`, Chrome `sidePanel.setPanelBehavior({ openPanelOnActionClick })`, Firefox `action.onClicked` → `sidebarAction.toggle()`.
 
 **Aufnahmezustand**
 - In `chrome.storage.session` halten, weil der Chrome Service Worker jederzeit beendet werden kann.
-- Felder: `guideId, tabId, windowId, startedAt, count, paused, pausedMs, pauseStart`.
+- Felder: `guideId, tabId, windowId, startedAt, count, paused, pausedMs, pauseStart, insert, added`.
+- Einfügen: `insert` = `{ anchor, after, next, number, title }`. Neue Schritte bekommen Reihenfolgewerte zwischen `after` und `next` (Bruchzahlen, keine Neunummerierung). `added` listet die Schritte dieser Aufnahme; „Letzten verwerfen“ löscht nur daraus. Eine im Editor vorgemerkte Stelle liegt als `pendingInsert` in `storage.session`.
 - Beim Start das Content-Script per `chrome.scripting.executeScript` nachladen, falls der Tab schon vor der Installation offen war. Das Content-Script schützt sich mit einem Flag gegen doppelte Initialisierung.
 - Das Content-Script fragt beim Laden per Nachricht, ob sein Tab aufgenommen wird. So überlebt die Aufnahme Seitenwechsel im selben Tab.
 - Guide-Titel nicht aus dem Seitentitel übernehmen, der enthält oft Datensatznamen.
@@ -95,7 +97,7 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 
 Umgesetzt: Aufnahme mit Auto-Schwärzung, Popup, Seitenleiste, Editor mit entfernbaren Schwärzungen, Zuschneiden, Klickpunkt, Pfeilen, Abschnitte, Export (HTML, PDF-Datei, Odoo-Zwischenablage, Markdown-ZIP), Projektsicherung und Import, Einstellungen.
 
-Prüfen vor jedem Commit: `npm test`, `npm run lint`, `npm run e2e`.
+Prüfen vor jedem Commit: `npm test`, `npm run lint`, `npm run e2e`. Bei Änderungen an Screenshot, Schwärzung oder Klickpunkt zusätzlich `npm run e2e:align`: Der Headless-E2E emuliert den Viewport, dort passt der Screenshot nicht zum DOM; nur im echten Fenster lässt sich die Ausrichtung prüfen.
 
 Offen:
 1. Test in echtem Firefox (bisher nur `web-ext lint`, E2E läuft in Chromium).

@@ -17,12 +17,21 @@
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="#1B1D1F"></rect><circle cx="12" cy="12" r="4" fill="#2B59C3"></circle></svg>
       <span>Workflow Recorder</span>
     </div>
+    <span class="head-actions">
+    <button id="sb-all" class="btn-icon" type="button" aria-label="Alle Anleitungen" title="Alle Anleitungen">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+    </button>
     <button id="sb-settings" class="btn-icon" type="button" aria-label="Einstellungen" title="Einstellungen">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg>
     </button>
+    </span>
   </div>
   <div class="start">
-    <button id="sb-start" class="btn-rec" type="button"><span class="dot" aria-hidden="true"></span>Aufnahme starten</button>
+    <div id="sb-pending" class="pending" hidden>
+      <span id="sb-pending-text"></span>
+      <button id="sb-pending-clear" class="btn-link inline" type="button">Aufheben</button>
+    </div>
+    <button id="sb-start" class="btn-rec" type="button"><span class="dot" aria-hidden="true"></span><span id="sb-start-label">Aufnahme starten</span></button>
     <div id="sb-perm" class="warn" hidden>
       <span>Die Erweiterung braucht Zugriff auf Webseiten. <button id="sb-perm-btn" class="btn-link inline" type="button">Zugriff erlauben</button></span>
     </div>
@@ -36,6 +45,7 @@
     <span class="rec-label"><span id="sb-dot" class="rec-dot" aria-hidden="true"></span><span id="sb-status">AUFNAHME</span></span>
     <span id="sb-time" class="mono rec-time">00:00</span>
   </div>
+  <p id="sb-insert" class="rec-insert" hidden></p>
   <div class="rec-count">
     <span id="sb-count" class="big">0</span>
     <span id="sb-count-label">Schritte erfasst</span>
