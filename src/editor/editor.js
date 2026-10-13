@@ -163,8 +163,6 @@ var Editor = (() => {
       api.tabs.get(guide.sourceTabId).then((t) => { S.srcWindowId = t.windowId; }, () => {});
     }
     Settings.get().then((st) => { S.openSidebar = st.openSidebar; });
-    // Freigabe der Herkunftsseite vorab prüfen: die Abfrage muss synchron im Klick starten.
-    if (guide.sourceOrigin) U.siteInfo(guide.sourceOrigin + '/').then((i) => { S.srcSite = i; });
     const want = U.intParam('step');
     const idx = want ? S.steps.findIndex((x) => x.id === want) : -1;
     select(idx >= 0 ? idx : 0);
@@ -888,16 +886,10 @@ var Editor = (() => {
     $('ed-insert').addEventListener('click', async () => {
       const s = current();
       if (!s) return;
-      const ask = S.srcSite && S.srcSite.site && !S.srcSite.granted ? U.requestOrigins([S.srcSite.site]) : null;
       // Chrome: Seitenleiste im Fenster der Anwendung öffnen, solange die Nutzeraktion gilt.
       if (S.openSidebar && S.srcWindowId != null && api.sidePanel && api.sidePanel.open) {
         api.sidePanel.open({ windowId: S.srcWindowId }).catch(() => {});
       }
-      if (ask && !(await ask)) {
-        U.toast(`Ohne Freigabe für ${S.srcSite.host} kann dort nicht aufgenommen werden.`, { error: true, ms: 6000 });
-        return;
-      }
-      if (ask) S.srcSite.granted = true;
       await flushSaves();
       const r = await U.send({ type: 'insert-here', guideId: S.guide.id, afterStepId: s.id }).catch(() => null);
       if (r && r.ok) return; // Aufnahme läuft im Herkunfts-Tab
@@ -905,9 +897,7 @@ var Editor = (() => {
         U.toast(`Der Tab der Aufnahme ist nicht mehr offen. Vorgemerkt: Neue Schritte kommen nach Schritt ${r.pendingInsert.number || '–'}. Öffne die Anwendung und starte die Aufnahme über das Symbol oder ${U.isMac() ? '⌥⇧R' : 'Alt+Shift+R'}.`, { ms: 9000 });
         return;
       }
-      U.toast(r && r.error === 'permission'
-        ? 'Für diese Website gibt es keine Freigabe. Bitte in der Seitenleiste oder in den Einstellungen erlauben.'
-        : (r && r.error) || 'Die Aufnahme konnte nicht gestartet werden.', { error: true, ms: 6000 });
+      U.toast((r && r.error) || 'Die Aufnahme konnte nicht gestartet werden.', { error: true, ms: 6000 });
     });
     $('ed-down').addEventListener('click', () => move(1));
     $('ed-add-section').addEventListener('click', addSection);

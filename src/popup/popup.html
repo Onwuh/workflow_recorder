@@ -36,7 +36,10 @@
         <span class="dot" aria-hidden="true"></span>
         <span id="start-label">Aufnahme starten</span>
       </button>
-      <div id="perm" class="site-box" hidden></div>
+      <div id="perm" class="warn" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        <span>Die Erweiterung braucht Zugriff auf Webseiten, um Screenshots aufzunehmen. <button id="btn-perm" class="btn-link inline" type="button">Zugriff erlauben</button></span>
+      </div>
       <p id="error" class="error" role="alert" hidden></p>
       <div class="opts">
         <label class="check"><input id="opt-redact" type="checkbox"> Eingaben automatisch schwärzen</label>
@@ -64,7 +67,6 @@
         <span id="rec-time" class="mono rec-time">00:00</span>
       </div>
       <p id="rec-insert" class="rec-insert" hidden></p>
-      <div id="rec-blocked" class="site-box" hidden></div>
       <div class="rec-count">
         <span id="rec-count" class="big">0</span>
         <span id="rec-count-label">Schritte erfasst</span>

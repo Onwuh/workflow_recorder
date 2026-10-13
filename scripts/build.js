@@ -14,11 +14,7 @@ const COPY = ['src', 'icons'];
 
 function firefoxManifest(chrome) {
   const m = JSON.parse(JSON.stringify(chrome));
-  m.background = { scripts: ['src/db.js', 'src/settings.js', 'src/lib/hosts.js', 'src/background.js'] };
-  // Firefox: Host-Berechtigungen sind unter MV3 ohnehin optional und einzeln widerrufbar.
-  // optional_host_permissions kennt Firefox erst ab 128, daher hier host_permissions.
-  delete m.optional_host_permissions;
-  m.host_permissions = ['<all_urls>'];
+  m.background = { scripts: ['src/db.js', 'src/settings.js', 'src/background.js'] };
   m.permissions = m.permissions.filter((p) => p !== 'sidePanel');
   delete m.side_panel;
   m.sidebar_action = {

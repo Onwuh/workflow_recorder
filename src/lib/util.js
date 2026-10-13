@@ -168,45 +168,5 @@ var U = (() => {
     return box;
   }
 
-  // ---------- Website-Freigaben ----------
-
-  /** Freigabestatus einer Adresse vom Hintergrund: { host, site, domain, recordable, granted }. */
-  async function siteInfo(url) {
-    try { return await send({ type: 'site-info', url: url || '' }); } catch (_) { return null; }
-  }
-
-  /**
-   * Fragt den Browser nach Zugriff. MUSS synchron aus einem Klick heraus aufgerufen werden
-   * (Firefox verlangt das ohne vorheriges await). Liefert ein Promise<boolean>.
-   */
-  function requestOrigins(origins) {
-    try {
-      return api.permissions.request({ origins }).catch(() => false);
-    } catch (_) {
-      return Promise.resolve(false);
-    }
-  }
-
-  /**
-   * Hinweis mit Freigabe-Buttons in box rendern. info: Ergebnis von siteInfo.
-   * text: optionaler Einleitungssatz. onGranted: nach erfolgreicher Freigabe.
-   */
-  function renderSiteBox(box, info, { text, onGranted } = {}) {
-    if (!box) return;
-    if (!info || !info.site || info.granted) { box.hidden = true; box.replaceChildren(); return; }
-    const done = (p) => p.then((ok) => { if (ok && onGranted) onGranted(); });
-    const kids = [
-      el('span', { class: 'site-text', text: text || `Für ${info.host} ist noch kein Zugriff erteilt. Beim Start fragt der Browser einmal nach.` }),
-      el('span', { class: 'site-actions' },
-        el('button', { class: 'btn-link inline', type: 'button', text: `${info.host} erlauben`, onclick: () => done(requestOrigins([info.site])) }),
-        info.domain ? el('button', {
-          class: 'btn-link inline', type: 'button', text: `Alle ${info.domain.label}-Instanzen erlauben`,
-          onclick: () => done(requestOrigins([info.domain.pattern]))
-        }) : null)
-    ];
-    box.replaceChildren(...kids);
-    box.hidden = false;
-  }
-
-  return { siteInfo, requestOrigins, renderSiteBox, api, el, icon, thumb, relDay, relTime, dateDE, stepsLabel, escapeHtml, safeFilename, blobToDataUrl, download, toast, send, intParam, isMac, pad2 };
+  return { api, el, icon, thumb, relDay, relTime, dateDE, stepsLabel, escapeHtml, safeFilename, blobToDataUrl, download, toast, send, intParam, isMac, pad2 };
 })();

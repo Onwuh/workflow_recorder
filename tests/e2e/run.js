@@ -6,9 +6,8 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const { chromium } = require('playwright');
-const { makeTestExtension } = require('./testext.js');
 
-const ROOT = makeTestExtension();
+const ROOT = path.resolve(__dirname, '../..');
 const OUT = process.env.E2E_OUT || path.join(os.tmpdir(), 'wfr-e2e');
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -486,50 +485,6 @@ function check(cond, msg) {
   const selText = await editor.locator('#ed-steps .step-btn[aria-selected="true"] .t').textContent();
   const secondText = await editor.locator('#ed-steps .step-btn').nth(1).locator('.t').textContent();
   check(selText === 'Klicke auf „Bestätigen“' && secondText === selText, 'nach dem Stopp ist der eingefügte Schritt ohne Neuladen ausgewählt');
-
-  // ---------- Website-Freigaben ----------
-  const scripts = await helper.evaluate(() => chrome.scripting.getRegisteredContentScripts());
-  check(scripts.length === 1 && scripts[0].matches.includes('http://127.0.0.1/*'), 'Content-Script nur für freigegebene Website registriert: ' + JSON.stringify(scripts.map((x) => x.matches)));
-  const other = base.replace('127.0.0.1', 'localhost');
-  const infos = await helper.evaluate(async ({ a, b }) => [
-    await chrome.runtime.sendMessage({ type: 'site-info', url: a }),
-    await chrome.runtime.sendMessage({ type: 'site-info', url: b })
-  ], { a: base, b: other });
-  check(infos[0].granted === true && infos[1].granted === false && infos[1].host === 'localhost', 'Freigabestatus je Website');
-
-  await page.bringToFront();
-  const recP = await helper.evaluate((t) => chrome.runtime.sendMessage({ type: 'start', tabId: t }), tabId);
-  check(recP.ok && recP.rec.temporary === false, 'Aufnahme auf freigegebener Website');
-  await page.goto(other);
-  await page.waitForTimeout(1200);
-  let stP = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
-  check(stP.rec.blocked && stP.rec.blocked.host === 'localhost' && stP.rec.blocked.reason === 'permission', 'Seite ohne Freigabe wird erkannt');
-  const sbB = await ctx.newPage();
-  await sbB.goto(ext('src/sidebar/sidebar.html'));
-  await sbB.waitForTimeout(800);
-  check(await sbB.locator('#sb-blocked').isVisible() && (await sbB.locator('#sb-blocked').textContent()).includes('keine Freigabe'), 'Seitenleiste zeigt „keine Freigabe“');
-  await sbB.screenshot({ path: path.join(OUT, 'seitenleiste-keine-freigabe.png') });
-  await sbB.close();
-  await page.bringToFront();
-  const cntBlocked = stP.rec.count;
-  await page.click('#confirm');
-  await page.waitForTimeout(900);
-  stP = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
-  check(stP.rec.count === cntBlocked, 'ohne Freigabe keine Schritte');
-  await page.goto(base);
-  await page.waitForTimeout(1200);
-  await page.click('#confirm');
-  await page.waitForTimeout(1200);
-  stP = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
-  check(!stP.rec.blocked && stP.rec.count === cntBlocked + 1, 'zurück auf freigegebener Website: Hinweis weg, Schritte wieder aufgenommen');
-  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop', openEditor: false }));
-
-  const opt = await ctx.newPage();
-  await opt.goto(ext('src/options/options.html'));
-  await opt.waitForTimeout(600);
-  check((await opt.locator('#grants li').allTextContents()).some((t) => t.includes('127.0.0.1')), 'Einstellungen listen die Freigaben');
-  await opt.screenshot({ path: path.join(OUT, 'einstellungen-freigaben.png'), fullPage: true });
-  await opt.close();
 
   check(errors.length === 0, 'keine Fehler in Erweiterungsseiten ' + JSON.stringify(errors));
   await ctx.close();

@@ -63,14 +63,17 @@
     return tab;
   }
 
-  let lastBlocked = '';
-  let site = null; // Freigabestatus des aktiven Tabs, vorab geladen (Abfrage muss synchron im Klick starten)
-
   async function checkPermission() {
     const tab = await activeTab();
-    site = await U.siteInfo(tab && tab.url);
-    U.renderSiteBox($('perm'), site && site.recordable ? site : null, { onGranted: checkPermission });
-    return !site || site.granted;
+    let ok = true;
+    try {
+      const u = new URL(tab && tab.url);
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        ok = await api.permissions.contains({ origins: [u.origin + '/*'] });
+      }
+    } catch (_) { /* keine prüfbare Seite */ }
+    $('perm').hidden = ok;
+    return ok;
   }
 
   async function renderRecent() {
@@ -95,18 +98,10 @@
     }));
   }
 
-  /** Klick auf „Aufnahme starten“: ggf. zuerst Freigabe anfragen (synchron), dann starten. */
-  function start() {
-    const ask = site && site.recordable && !site.granted && site.site ? U.requestOrigins([site.site]) : null;
-    doStart(ask);
-  }
-
-  async function doStart(ask) {
+  async function start() {
     showError('');
     $('btn-start').disabled = true;
     try {
-      // Abgelehnt? Dann trotzdem versuchen: Der Klick aufs Symbol gibt vorübergehend Zugriff (activeTab).
-      if (ask) await ask;
       const r = await U.send({ type: 'start' });
       if (r && r.ok) {
         rec = r.rec;
@@ -114,8 +109,8 @@
         return;
       }
       if (r && r.error === 'permission') {
-        await checkPermission();
-        showError('Ohne Freigabe für diese Website kann hier nicht aufgenommen werden.');
+        $('perm').hidden = false;
+        showError('Bitte zuerst den Zugriff erlauben.');
       } else {
         showError((r && r.error) || 'Die Aufnahme konnte nicht gestartet werden.');
       }
@@ -123,6 +118,19 @@
       showError('Die Aufnahme konnte nicht gestartet werden.');
     } finally {
       $('btn-start').disabled = false;
+    }
+  }
+
+  async function requestPermission() {
+    try {
+      // Firefox: Host-Berechtigungen sind unter MV3 optional und müssen erteilt werden.
+      const granted = await api.permissions.request({ origins: ['<all_urls>'] });
+      if (granted) {
+        $('perm').hidden = true;
+        showError('');
+      }
+    } catch (_) {
+      showError('Zugriff bitte in den Add-on-Einstellungen unter „Berechtigungen“ erteilen.');
     }
   }
 
@@ -148,19 +156,6 @@
     $('ico-pause').hidden = rec.paused;
     $('ico-play').hidden = !rec.paused;
     $('rec-host').textContent = rec.host || '—';
-    const b = rec.blocked;
-    const key = JSON.stringify(b || null);
-    if (key !== lastBlocked) {
-      lastBlocked = key;
-      if (b && b.reason === 'permission') {
-        U.renderSiteBox($('rec-blocked'), { ...b, granted: false }, { text: `Für ${b.host} gibt es keine Freigabe. Hier werden keine Schritte aufgenommen.` });
-      } else if (b) {
-        $('rec-blocked').hidden = false;
-        $('rec-blocked').textContent = 'Auf dieser Seite kann nicht aufgenommen werden.';
-      } else {
-        $('rec-blocked').hidden = true;
-      }
-    }
     $('rec-insert').hidden = !rec.insert;
     if (rec.insert) {
       $('rec-insert').textContent = rec.insert.number
@@ -252,6 +247,7 @@
     await U.send({ type: 'clear-insert' });
     renderReady();
   });
+  $('btn-perm').addEventListener('click', requestPermission);
   $('btn-settings').addEventListener('click', () => { api.runtime.openOptionsPage(); window.close(); });
   $('link-all').addEventListener('click', (e) => { e.preventDefault(); openPage('src/editor/editor.html'); });
   $('opt-redact').addEventListener('change', async (e) => {

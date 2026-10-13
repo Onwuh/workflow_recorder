@@ -3,7 +3,7 @@
    Firefox: Hintergrundseite, Skripte kommen über manifest.background.scripts. */
 'use strict';
 
-if (typeof DB === 'undefined') importScripts('db.js', 'settings.js', 'lib/hosts.js');
+if (typeof DB === 'undefined') importScripts('db.js', 'settings.js');
 
 const api = globalThis.browser ?? globalThis.chrome;
 
@@ -69,85 +69,13 @@ function isRecordableUrl(url) {
 }
 
 async function hasHostPermission(url) {
-  const pattern = Hosts.sitePattern(url);
-  if (!pattern) return false;
   try {
-    return await api.permissions.contains({ origins: [pattern] });
+    const origin = new URL(url).origin + '/*';
+    return await api.permissions.contains({ origins: [origin] });
   } catch (_) {
     return false;
   }
 }
-
-/** Was die Oberfläche für die Freigabe einer Seite braucht. */
-function siteInfo(url) {
-  let host = '';
-  try { host = new URL(url).hostname; } catch (_) { /* keine Adresse */ }
-  return { host, site: Hosts.sitePattern(url), domain: Hosts.domainPattern(url) };
-}
-
-// ---------- Content-Script nur auf freigegebenen Websites ----------
-
-const SCRIPT_ID = 'wfr-content';
-
-/** Registriert das Content-Script für alle erteilten Website-Freigaben (läuft dort ab document_start). */
-async function syncContentScripts() {
-  try {
-    const { origins = [] } = await api.permissions.getAll();
-    const matches = Hosts.scriptMatches(origins);
-    await api.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] }).catch(() => {});
-    if (!matches.length) return;
-    const def = { id: SCRIPT_ID, js: ['src/content.js'], matches, runAt: 'document_start', allFrames: false };
-    try {
-      await api.scripting.registerContentScripts([{ ...def, persistAcrossSessions: true }]);
-    } catch (_) {
-      await api.scripting.registerContentScripts([def]); // ältere Firefox-Versionen
-    }
-  } catch (_) { /* ohne Freigaben nichts zu tun */ }
-}
-
-/** Content-Script in den aufgenommenen Tab bringen. Gelingt das nicht, fehlt die Freigabe. */
-async function injectInto(tabId) {
-  try {
-    await api.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ['src/content.js'] });
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-/** Nach Seitenwechsel im aufgenommenen Tab: Freigabe prüfen und den Hinweis in der Seitenleiste setzen. */
-async function checkRecordedTab(tab) {
-  const rec = await getState();
-  if (!rec || rec.tabId !== tab.id) return;
-  let blocked = null;
-  if (!isRecordableUrl(tab.url)) {
-    blocked = { host: '', reason: 'page' };
-  } else if (!(await injectInto(tab.id))) {
-    blocked = { ...siteInfo(tab.url), reason: 'permission' };
-  } else {
-    await notifyTab(tab.id, await contentState(rec));
-  }
-  const now = await getState();
-  if (!now || now.tabId !== tab.id) return;
-  if (JSON.stringify(now.blocked || null) !== JSON.stringify(blocked)) {
-    now.blocked = blocked;
-    await setState(now);
-  }
-}
-
-api.tabs.onUpdated.addListener((tabId, info, tab) => {
-  if (info.status === 'complete') checkRecordedTab(tab).catch(() => {});
-});
-
-api.permissions.onAdded.addListener(async () => {
-  await syncContentScripts();
-  const rec = await getState();
-  if (rec) {
-    const tab = await api.tabs.get(rec.tabId).catch(() => null);
-    if (tab) await checkRecordedTab(tab);
-  }
-});
-if (api.permissions.onRemoved) api.permissions.onRemoved.addListener(() => syncContentScripts());
 
 // ---------- Aktionen ----------
 
@@ -191,8 +119,9 @@ async function start(tabId, target) {
   if (!isRecordableUrl(tab.url)) {
     return { ok: false, error: 'Auf dieser Seite kann nicht aufgenommen werden. Bitte eine Webseite (http/https) öffnen.' };
   }
-  // Ohne dauerhafte Freigabe reicht activeTab (Klick aufs Symbol, Kurzbefehl), bis die Seite wechselt.
-  const granted = await hasHostPermission(tab.url);
+  if (!(await hasHostPermission(tab.url))) {
+    return { ok: false, error: 'permission' };
+  }
 
   // Ohne ausdrückliches Ziel gilt eine im Editor vorgemerkte Einfügestelle.
   if (!target) target = await getPendingInsert();
@@ -202,11 +131,11 @@ async function start(tabId, target) {
     if (!insert) return { ok: false, error: 'Die Anleitung oder der Schritt zum Einfügen existiert nicht mehr.' };
   }
 
-  // Content-Script einspielen (auch wenn der Tab schon vor der Freigabe offen war).
-  if (!(await injectInto(tab.id))) {
-    return granted
-      ? { ok: false, error: 'Auf dieser Seite lässt der Browser keine Erweiterungen zu.' }
-      : { ok: false, error: 'permission', ...siteInfo(tab.url) };
+  // Content-Script nachladen, falls der Tab schon vor der Installation offen war.
+  try {
+    await api.scripting.executeScript({ target: { tabId: tab.id, frameIds: [0] }, files: ['src/content.js'] });
+  } catch (_) {
+    return { ok: false, error: 'Auf dieser Seite lässt der Browser keine Erweiterungen zu.' };
   }
 
   const guideId = insert ? target.guideId : (await DB.addGuide({ title: guideTitle() })).id;
@@ -223,8 +152,6 @@ async function start(tabId, target) {
     pausedMs: 0,
     pauseStart: 0,
     host: safeHost(tab.url),
-    temporary: !granted, // nur über activeTab, endet beim Seitenwechsel
-    blocked: null,       // Seite ohne Freigabe: { host, site, domain, reason }
     insert,       // null = neue Anleitung, sonst Einfügen in bestehende
     added: []     // in dieser Aufnahme erzeugte Schritte { id, order }
   };
@@ -539,11 +466,6 @@ async function handle(msg, sender) {
   if (fromExtensionPage(sender)) {
     switch (msg.type) {
       case 'status': return { ok: true, rec: await getState(), pendingInsert: await getPendingInsert() };
-      case 'site-info': {
-        // Freigabestatus einer Seite für Popup, Seitenleiste und Editor.
-        const url = typeof msg.url === 'string' ? msg.url.slice(0, 2048) : '';
-        return { ok: true, ...siteInfo(url), recordable: isRecordableUrl(url), granted: await hasHostPermission(url) };
-      }
       case 'start': {
         const tabId = Number.isSafeInteger(msg.tabId) ? msg.tabId : undefined;
         const target = Number.isSafeInteger(msg.guideId) && msg.guideId > 0
@@ -629,9 +551,8 @@ api.action.onClicked.addListener((tab) => {
 
 api.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.settings) applyActionBehavior();
-syncContentScripts();
 });
-api.runtime.onInstalled.addListener(() => { applyActionBehavior(); syncContentScripts(); });
+api.runtime.onInstalled.addListener(() => applyActionBehavior());
 if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => applyActionBehavior());
 applyActionBehavior();
 
