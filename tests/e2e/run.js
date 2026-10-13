@@ -462,6 +462,30 @@ function check(cond, msg) {
   check(popupOff.endsWith('src/popup/popup.html'), 'abgeschaltet: Popup wieder aktiv');
   await helper.evaluate(() => Settings.set({ openSidebar: true }));
 
+  // ---------- Editor: zurück zum Herkunfts-Tab springen, Live-Update ----------
+  await editor.bringToFront();
+  await editor.reload();
+  await editor.waitForTimeout(800);
+  const edCountBefore = await editor.locator('#ed-steps .step-btn').count();
+  await editor.locator('#ed-steps .step-btn').first().click();
+  await editor.click('#ed-insert');
+  await editor.waitForTimeout(1200);
+  const jump = await helper.evaluate(async (t) => {
+    const tab = await chrome.tabs.get(t);
+    const st = await chrome.runtime.sendMessage({ type: 'status' });
+    return { active: tab.active, rec: st.rec };
+  }, tabId);
+  check(jump.active && jump.rec && jump.rec.insert && jump.rec.insert.number === 1, 'Editor springt zum Herkunfts-Tab und startet das Einfügen');
+  await page.click('#confirm');
+  await page.waitForTimeout(1200);
+  const edCountLive = await editor.locator('#ed-steps .step-btn').count();
+  check(edCountLive === edCountBefore + 1, `Editor zeigt neuen Schritt live (${edCountBefore} → ${edCountLive})`);
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop', openEditor: false }));
+  await editor.waitForTimeout(800);
+  const selText = await editor.locator('#ed-steps .step-btn[aria-selected="true"] .t').textContent();
+  const secondText = await editor.locator('#ed-steps .step-btn').nth(1).locator('.t').textContent();
+  check(selText === 'Klicke auf „Bestätigen“' && secondText === selText, 'nach dem Stopp ist der eingefügte Schritt ohne Neuladen ausgewählt');
+
   check(errors.length === 0, 'keine Fehler in Erweiterungsseiten ' + JSON.stringify(errors));
   await ctx.close();
   server.close();

@@ -63,7 +63,7 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 **Aufnahmezustand**
 - In `chrome.storage.session` halten, weil der Chrome Service Worker jederzeit beendet werden kann.
 - Felder: `guideId, tabId, windowId, startedAt, count, paused, pausedMs, pauseStart, insert, added`.
-- Einfügen: `insert` = `{ anchor, after, next, number, title }`. Neue Schritte bekommen Reihenfolgewerte zwischen `after` und `next` (Bruchzahlen, keine Neunummerierung). `added` listet die Schritte dieser Aufnahme; „Letzten verwerfen“ löscht nur daraus. Eine im Editor vorgemerkte Stelle liegt als `pendingInsert` in `storage.session`.
+- Einfügen: `insert` = `{ anchor, after, next, number, title }`. Neue Schritte bekommen Reihenfolgewerte zwischen `after` und `next` (Bruchzahlen, keine Neunummerierung). `added` listet die Schritte dieser Aufnahme; „Letzten verwerfen“ löscht nur daraus. Eine vorgemerkte Stelle liegt als `pendingInsert` in `storage.session`. Die Anleitung merkt sich `sourceTabId`/`sourceOrigin` (nur lokal, nicht in Exporten/Sicherung); „Schritte danach aufnehmen“ im Editor springt dorthin (`insert-here`). Der Editor lädt Schritte bei Änderungen an `rec` in `storage.session` neu.
 - Beim Start das Content-Script per `chrome.scripting.executeScript` nachladen, falls der Tab schon vor der Installation offen war. Das Content-Script schützt sich mit einem Flag gegen doppelte Initialisierung.
 - Das Content-Script fragt beim Laden per Nachricht, ob sein Tab aufgenommen wird. So überlebt die Aufnahme Seitenwechsel im selben Tab.
 - Guide-Titel nicht aus dem Seitentitel übernehmen, der enthält oft Datensatznamen.

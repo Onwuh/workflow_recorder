@@ -139,6 +139,8 @@ async function start(tabId, target) {
   }
 
   const guideId = insert ? target.guideId : (await DB.addGuide({ title: guideTitle() })).id;
+  // Herkunft merken (nur lokal, nicht in Exporten), damit der Editor später dorthin zurückspringen kann.
+  await DB.updateGuide(guideId, { sourceTabId: tab.id, sourceOrigin: safeOrigin(tab.url) }).catch(() => {});
   await api.storage.session.remove('pendingInsert');
   const rec = {
     guideId,
@@ -156,6 +158,38 @@ async function start(tabId, target) {
   await setState(rec);
   await notifyTab(tab.id, await contentState(rec));
   return { ok: true, rec };
+}
+
+function safeOrigin(url) {
+  try { return new URL(url).origin; } catch (_) { return ''; }
+}
+
+/** Tab, aus dem die Anleitung aufgenommen wurde; sonst ein offener Tab mit derselben Adresse. */
+async function findSourceTab(guide) {
+  if (!guide || !guide.sourceOrigin) return null;
+  if (Number.isSafeInteger(guide.sourceTabId)) {
+    const t = await api.tabs.get(guide.sourceTabId).catch(() => null);
+    if (t && safeOrigin(t.url) === guide.sourceOrigin) return t;
+  }
+  const all = await api.tabs.query({});
+  return all.find((t) => safeOrigin(t.url) === guide.sourceOrigin) || null;
+}
+
+/** Editor „Schritte danach aufnehmen“: zum Herkunfts-Tab springen und dort einfügen. */
+async function insertHere(guideId, afterStepId) {
+  const guide = await DB.getGuide(guideId);
+  const tab = await findSourceTab(guide);
+  if (!tab) {
+    const ins = await insertPoint(guideId, afterStepId);
+    if (!ins) return { ok: false };
+    const pendingInsert = { guideId, afterStepId, number: ins.number, title: ins.title };
+    await api.storage.session.set({ pendingInsert });
+    return { ok: false, reason: 'no-tab', pendingInsert };
+  }
+  await api.tabs.update(tab.id, { active: true });
+  await api.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  await sleep(200); // Tab muss sichtbar sein, bevor Screenshots möglich sind
+  return start(tab.id, { guideId, afterStepId });
 }
 
 function safeHost(url) {
@@ -447,6 +481,11 @@ async function handle(msg, sender) {
         const pendingInsert = { guideId: msg.guideId, afterStepId, number: ins.number, title: ins.title };
         await api.storage.session.set({ pendingInsert });
         return { ok: true, pendingInsert };
+      }
+      case 'insert-here': {
+        if (!Number.isSafeInteger(msg.guideId) || msg.guideId <= 0) return { ok: false };
+        const afterStepId = Number.isSafeInteger(msg.afterStepId) && msg.afterStepId > 0 ? msg.afterStepId : 0;
+        return insertHere(msg.guideId, afterStepId);
       }
       case 'clear-insert':
         await api.storage.session.remove('pendingInsert');

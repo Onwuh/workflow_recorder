@@ -10,7 +10,7 @@ Browser-Erweiterung für Chrome und Firefox, die Klick-Abläufe aufzeichnet und 
 - Eingabewerte erscheinen nie im Schritttext.
 - Tastatureingaben als eigener Schritt sind optional.
 - Während der Aufnahme lässt sich der letzte Schritt verwerfen.
-- Schritte nachträglich einfügen: In der Seitenleiste „Ab hier Schritte aufnehmen“ an einem Schritt, oder im Editor „Schritte danach aufnehmen“ (vormerken, dann im Tab der Anwendung die Aufnahme starten). Neue Schritte landen direkt hinter dem gewählten Schritt.
+- Schritte nachträglich einfügen: In der Seitenleiste „Ab hier Schritte aufnehmen“ an einem Schritt, oder im Editor „Schritte danach aufnehmen“: Der Editor springt zurück in den Tab, aus dem aufgenommen wurde, und startet dort sofort (ist der Tab zu, ein offener Tab mit derselben Adresse; sonst wird die Stelle für den nächsten Start vorgemerkt). Neue Schritte landen direkt hinter dem gewählten Schritt. Der Editor zeigt neue Schritte live und wählt nach dem Stopp den ersten eingefügten aus.
 
 ## Schwärzung
 
