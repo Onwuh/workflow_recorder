@@ -7,8 +7,9 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const { chromium } = require('playwright');
+const { makeTestExtension } = require('./testext.js');
 
-const ROOT = path.resolve(__dirname, '../..');
+const ROOT = makeTestExtension();
 const PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
 body{margin:0;font-family:sans-serif} .pad{height:700px;background:#eee}
 .o_field_widget{display:inline-block;margin:40px} input{width:300px;height:40px;background:#FF00FF;border:0;color:#FF00FF}

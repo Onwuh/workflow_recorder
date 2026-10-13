@@ -32,9 +32,7 @@
       <button id="sb-pending-clear" class="btn-link inline" type="button">Aufheben</button>
     </div>
     <button id="sb-start" class="btn-rec" type="button"><span class="dot" aria-hidden="true"></span><span id="sb-start-label">Aufnahme starten</span></button>
-    <div id="sb-perm" class="warn" hidden>
-      <span>Die Erweiterung braucht Zugriff auf Webseiten. <button id="sb-perm-btn" class="btn-link inline" type="button">Zugriff erlauben</button></span>
-    </div>
+    <div id="sb-perm" class="site-box" hidden></div>
     <p id="sb-error" class="error" role="alert" hidden></p>
   </div>
 </section>
@@ -46,6 +44,7 @@
     <span id="sb-time" class="mono rec-time">00:00</span>
   </div>
   <p id="sb-insert" class="rec-insert" hidden></p>
+  <div id="sb-blocked" class="site-box" hidden></div>
   <div class="rec-count">
     <span id="sb-count" class="big">0</span>
     <span id="sb-count-label">Schritte erfasst</span>

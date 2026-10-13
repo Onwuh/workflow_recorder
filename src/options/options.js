@@ -23,10 +23,24 @@
     $('footer').value = s.footer;
   }
 
+  /** Erteilte Website-Freigaben anzeigen, einzeln widerrufbar. */
   async function checkPerm() {
-    const ok = await api.permissions.contains({ origins: ['<all_urls>'] });
-    $('perm-card').hidden = ok;
+    const { origins = [] } = await api.permissions.getAll();
+    const list = origins.filter((o) => o === '<all_urls>' || /^(https?|\*):\/\//.test(o));
+    const all = list.includes('<all_urls>') || list.includes('*://*/*');
+    $('grants').replaceChildren(...list.map((o) => U.el('li', null,
+      U.el('span', null, U.el('strong', { text: Hosts.label(o) }), ' ', U.el('span', { class: 'mono', text: o === '<all_urls>' ? '' : o })),
+      U.el('button', {
+        class: 'btn btn-danger', type: 'button', text: 'Widerrufen',
+        onclick: async () => {
+          try { await api.permissions.remove({ origins: [o] }); } catch (_) { /* in Firefox ggf. nur in about:addons */ }
+          checkPerm();
+        }
+      }))));
+    $('grants-empty').hidden = list.length > 0;
+    $('perm-all').hidden = all;
   }
+
 
   $('autoRedact').addEventListener('change', async (e) => { await Settings.set({ autoRedact: e.target.checked }); notify(); });
   $('keySteps').addEventListener('change', async (e) => { await Settings.set({ keySteps: e.target.checked }); notify(); });
@@ -58,11 +72,8 @@
     t = setTimeout(() => Settings.set({ footer: e.target.value }), 400);
   });
 
-  $('perm-btn').addEventListener('click', async () => {
-    try {
-      await api.permissions.request({ origins: ['<all_urls>'] });
-    } catch (_) { /* Nutzer hat abgelehnt */ }
-    checkPerm();
+  $('perm-all').addEventListener('click', () => {
+    U.requestOrigins(['<all_urls>']).then(checkPerm);
   });
 
   $('shortcut').textContent = U.isMac() ? '⌥ ⇧ R' : 'Alt + Shift + R';

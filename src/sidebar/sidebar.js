@@ -160,29 +160,71 @@
       guideId = gs.length ? gs[0].id : null;
     }
     renderHead();
+    renderBlocked();
     await renderSteps(force);
   }
 
+  // ---------- Freigabe der Website im aktiven Tab ----------
+
+  let windowId = null;
+  let activeTabId = null;
+  let site = null; // vorab geladen: die Browser-Abfrage muss synchron im Klick starten
+
+  async function refreshSite() {
+    const q = windowId != null ? { active: true, windowId } : { active: true, currentWindow: true };
+    const [tab] = await api.tabs.query(q);
+    activeTabId = tab ? tab.id : null;
+    site = await U.siteInfo(tab && tab.url);
+    U.renderSiteBox($('sb-perm'), site && site.recordable ? site : null, { onGranted: refreshSite });
+  }
+
+  let lastBlocked = '';
+  function renderBlocked() {
+    const b = rec && rec.blocked;
+    const key = JSON.stringify(b || null);
+    if (key === lastBlocked) return;
+    lastBlocked = key;
+    if (b && b.reason === 'permission') {
+      U.renderSiteBox($('sb-blocked'), { ...b, granted: false }, { text: `Für ${b.host} gibt es keine Freigabe. Hier werden keine Schritte aufgenommen.` });
+    } else if (b) {
+      $('sb-blocked').hidden = false;
+      $('sb-blocked').textContent = 'Auf dieser Seite kann nicht aufgenommen werden.';
+    } else {
+      $('sb-blocked').hidden = true;
+    }
+  }
+
   /** target: { guideId, afterStepId } zum Einfügen; ohne Ziel gilt eine vorgemerkte Einfügestelle. */
-  async function start(target) {
+  function start(target) {
+    const ask = site && site.recordable && !site.granted && site.site ? U.requestOrigins([site.site]) : null;
+    doStart(target, ask);
+  }
+
+  async function doStart(target, ask) {
     showError('');
     $('sb-start').disabled = true;
     try {
-      const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-      const msg = { type: 'start', tabId: tab ? tab.id : undefined };
+      if (ask && !(await ask)) {
+        await refreshSite();
+        showError('Ohne Freigabe für diese Website kann hier nicht aufgenommen werden.');
+        return;
+      }
+      const msg = { type: 'start', tabId: activeTabId != null ? activeTabId : undefined };
       if (target && target.guideId) Object.assign(msg, { guideId: target.guideId, afterStepId: target.afterStepId || 0 });
       const r = await U.send(msg);
       if (r && r.ok) {
         guideId = r.rec.guideId;
         await refresh(true);
       } else if (r && r.error === 'permission') {
-        $('sb-perm').hidden = false;
+        await refreshSite();
+        showError('Ohne Freigabe für diese Website kann hier nicht aufgenommen werden.');
       } else {
         showError((r && r.error) || 'Die Aufnahme konnte nicht gestartet werden.');
         window.scrollTo(0, 0);
       }
     } finally {
       $('sb-start').disabled = false;
+      refreshSite();
     }
   }
 
@@ -193,11 +235,6 @@
     refresh(true);
   });
   $('sb-settings').addEventListener('click', () => api.runtime.openOptionsPage());
-  $('sb-perm-btn').addEventListener('click', async () => {
-    try {
-      if (await api.permissions.request({ origins: ['<all_urls>'] })) $('sb-perm').hidden = true;
-    } catch (_) { showError('Zugriff bitte in den Add-on-Einstellungen erteilen.'); }
-  });
   $('sb-pause').addEventListener('click', async () => {
     await U.send({ type: rec && rec.paused ? 'resume' : 'pause' });
     refresh();
@@ -216,6 +253,14 @@
   api.storage.onChanged.addListener((changes, area) => {
     if (area === 'session' && (changes.rec || changes.pendingInsert)) refresh(!!changes.pendingInsert);
   });
+  // Aktiven Tab dieses Fensters verfolgen, damit der Freigabe-Hinweis zur sichtbaren Seite passt.
+  api.windows.getCurrent().then((w) => { windowId = w.id; refreshSite(); }, () => refreshSite());
+  api.tabs.onActivated.addListener((info) => { if (windowId == null || info.windowId === windowId) refreshSite(); });
+  api.tabs.onUpdated.addListener((id, info, tab) => {
+    if (tab.active && (windowId == null || tab.windowId === windowId) && (info.status === 'complete' || info.url)) refreshSite();
+  });
+  if (api.permissions.onAdded) api.permissions.onAdded.addListener(() => refreshSite());
+  if (api.permissions.onRemoved) api.permissions.onRemoved.addListener(() => refreshSite());
   setInterval(() => { if (rec) $('sb-time').textContent = elapsed(rec); }, 500);
   // Rückfall, falls Änderungen aus dem Editor kommen.
   setInterval(() => refresh(), 2000);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Workflow Recorder",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Zeichnet Klick-Abläufe auf und exportiert sie als Schritt-für-Schritt-Anleitung. Alles bleibt lokal.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -23,19 +23,6 @@
   "side_panel": {
     "default_path": "src/sidebar/sidebar.html"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "src/content.js"
-      ],
-      "run_at": "document_start",
-      "all_frames": false
-    }
-  ],
   "options_ui": {
     "page": "src/options/options.html",
     "open_in_tab": true
@@ -45,9 +32,10 @@
     "tabs",
     "scripting",
     "unlimitedStorage",
-    "sidePanel"
+    "sidePanel",
+    "activeTab"
   ],
-  "host_permissions": [
+  "optional_host_permissions": [
     "<all_urls>"
   ],
   "commands": {
