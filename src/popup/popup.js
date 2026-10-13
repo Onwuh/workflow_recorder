@@ -40,6 +40,16 @@
       if (c && c.shortcut) $('shortcut').textContent = c.shortcut;
     } catch (_) { /* Standardanzeige */ }
 
+    const st = await U.send({ type: 'status' }).catch(() => null);
+    const p = st && st.pendingInsert;
+    $('pending').hidden = !p;
+    $('start-label').textContent = p ? 'Schritte einfügen' : 'Aufnahme starten';
+    if (p) {
+      $('pending-text').textContent = p.number
+        ? `Neue Schritte werden in „${p.title}“ nach Schritt ${p.number} eingefügt.`
+        : `Neue Schritte werden in „${p.title}“ am Anfang eingefügt.`;
+    }
+
     const s = await Settings.get();
     $('opt-redact').checked = s.autoRedact;
     $('opt-keys').checked = s.keySteps;
@@ -146,6 +156,12 @@
     $('ico-pause').hidden = rec.paused;
     $('ico-play').hidden = !rec.paused;
     $('rec-host').textContent = rec.host || '—';
+    $('rec-insert').hidden = !rec.insert;
+    if (rec.insert) {
+      $('rec-insert').textContent = rec.insert.number
+        ? `Einfügen in „${rec.insert.title}“ nach Schritt ${rec.insert.number}`
+        : `Einfügen in „${rec.insert.title}“ am Anfang`;
+    }
     $('btn-discard').disabled = rec.count === 0;
   }
 
@@ -227,6 +243,10 @@
   $('btn-sidebar-rec').addEventListener('click', openSidebar);
 
   $('btn-start').addEventListener('click', start);
+  $('pending-clear').addEventListener('click', async () => {
+    await U.send({ type: 'clear-insert' });
+    renderReady();
+  });
   $('btn-perm').addEventListener('click', requestPermission);
   $('btn-settings').addEventListener('click', () => { api.runtime.openOptionsPage(); window.close(); });
   $('link-all').addEventListener('click', (e) => { e.preventDefault(); openPage('src/editor/editor.html'); });

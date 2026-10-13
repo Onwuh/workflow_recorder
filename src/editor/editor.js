@@ -158,6 +158,11 @@ var Editor = (() => {
     renderMeta();
     setInterval(renderMeta, 30000);
     renderList();
+    // Fenster des Herkunfts-Tabs vorab ermitteln: die Seitenleiste lässt sich nur synchron im Klick öffnen.
+    if (Number.isSafeInteger(guide.sourceTabId)) {
+      api.tabs.get(guide.sourceTabId).then((t) => { S.srcWindowId = t.windowId; }, () => {});
+    }
+    Settings.get().then((st) => { S.openSidebar = st.openSidebar; });
     const want = U.intParam('step');
     const idx = want ? S.steps.findIndex((x) => x.id === want) : -1;
     select(idx >= 0 ? idx : 0);
@@ -797,6 +802,32 @@ var Editor = (() => {
     $('ed-text').select();
   }
 
+  let reloading = Promise.resolve();
+  /** Schritte neu aus der Datenbank laden (z. B. nach einer Aufnahme). focusId: danach diesen Schritt zeigen. */
+  function reloadSteps(focusId) {
+    reloading = reloading.then(async () => {
+      await flushSaves();
+      const keepId = current() ? current().id : null;
+      const fresh = await DB.getSteps(S.guide.id);
+      const g = await DB.getGuide(S.guide.id);
+      if (g) S.guide.updatedAt = g.updatedAt;
+      S.steps = fresh;
+      renderList();
+      renderMeta();
+      const want = focusId || keepId;
+      const idx = want ? fresh.findIndex((x) => x.id === want) : -1;
+      if (focusId || idx < 0) {
+        select(idx >= 0 ? idx : Math.min(S.sel, fresh.length - 1));
+      } else {
+        // Auswahl und offenes Werkzeug behalten, nur die Liste nachziehen.
+        S.sel = idx;
+        for (const b of $('ed-steps').children) b.setAttribute('aria-selected', b.dataset.idx === String(idx) ? 'true' : 'false');
+        $('ed-num').textContent = fresh[idx].type === 'section' ? '§' : String(numbering()[idx]);
+      }
+    }).catch(() => {});
+    return reloading;
+  }
+
   function goToFlagged() {
     const i = S.steps.findIndex((s) => s.type !== 'section' && s.unredacted > 0 && !s.reviewed);
     if (i >= 0) select(i);
@@ -852,6 +883,22 @@ var Editor = (() => {
     $('ed-undo').addEventListener('click', undo);
     $('ed-delete').addEventListener('click', deleteCurrent);
     $('ed-up').addEventListener('click', () => move(-1));
+    $('ed-insert').addEventListener('click', async () => {
+      const s = current();
+      if (!s) return;
+      // Chrome: Seitenleiste im Fenster der Anwendung öffnen, solange die Nutzeraktion gilt.
+      if (S.openSidebar && S.srcWindowId != null && api.sidePanel && api.sidePanel.open) {
+        api.sidePanel.open({ windowId: S.srcWindowId }).catch(() => {});
+      }
+      await flushSaves();
+      const r = await U.send({ type: 'insert-here', guideId: S.guide.id, afterStepId: s.id }).catch(() => null);
+      if (r && r.ok) return; // Aufnahme läuft im Herkunfts-Tab
+      if (r && r.reason === 'no-tab') {
+        U.toast(`Der Tab der Aufnahme ist nicht mehr offen. Vorgemerkt: Neue Schritte kommen nach Schritt ${r.pendingInsert.number || '–'}. Öffne die Anwendung und starte die Aufnahme über das Symbol oder ${U.isMac() ? '⌥⇧R' : 'Alt+Shift+R'}.`, { ms: 9000 });
+        return;
+      }
+      U.toast((r && r.error) || 'Die Aufnahme konnte nicht gestartet werden.', { error: true, ms: 6000 });
+    });
     $('ed-down').addEventListener('click', () => move(1));
     $('ed-add-section').addEventListener('click', addSection);
     $('ed-crop-apply').addEventListener('click', applyCrop);
@@ -913,6 +960,17 @@ var Editor = (() => {
       } catch (e) {
         U.toast('Sicherung fehlgeschlagen: ' + (e && e.message ? e.message : e), { error: true });
       }
+    });
+
+    // Live aktualisieren, solange in diese Anleitung aufgenommen wird, und nach dem Stopp.
+    api.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'session' || !changes.rec || !S.guide) return;
+      const before = changes.rec.oldValue;
+      const now = changes.rec.newValue;
+      const mine = (r) => r && r.guideId === S.guide.id;
+      if (!mine(before) && !mine(now)) return;
+      const stopped = mine(before) && !now;
+      reloadSteps(stopped && before.added && before.added.length ? before.added[0].id : null);
     });
 
     window.addEventListener('beforeunload', () => { if (S.guide) flushSaves(); });

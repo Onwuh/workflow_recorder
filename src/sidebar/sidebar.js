@@ -7,6 +7,7 @@
   const $ = (id) => document.getElementById(id);
 
   let rec = null;
+  let pending = null;
   let guideId = null;
   let renderedKey = '';
   let urls = [];
@@ -31,7 +32,20 @@
     $('sb-ready').hidden = !!rec;
     $('sb-rec').hidden = !rec;
     $('sb-discard').hidden = !rec || !rec.count;
+    $('sb-pending').hidden = !pending;
+    $('sb-start-label').textContent = pending ? 'Schritte einfügen' : 'Aufnahme starten';
+    if (pending) {
+      $('sb-pending-text').textContent = pending.number
+        ? `Neue Schritte werden in „${pending.title}“ nach Schritt ${pending.number} eingefügt.`
+        : `Neue Schritte werden in „${pending.title}“ am Anfang eingefügt.`;
+    }
     if (!rec) return;
+    $('sb-insert').hidden = !rec.insert;
+    if (rec.insert) {
+      $('sb-insert').textContent = rec.insert.number
+        ? `Einfügen in „${rec.insert.title}“ nach Schritt ${rec.insert.number}`
+        : `Einfügen in „${rec.insert.title}“ am Anfang`;
+    }
     $('sb-time').textContent = elapsed(rec);
     $('sb-count').textContent = String(rec.count);
     $('sb-count-label').textContent = rec.count === 1 ? 'Schritt erfasst' : 'Schritte erfasst';
@@ -68,7 +82,7 @@
       return;
     }
     const steps = await DB.getSteps(guideId);
-    const key = `${guideId}:${guide.updatedAt}:${steps.length}`;
+    const key = `${guideId}:${guide.updatedAt}:${steps.length}:${rec ? 'r' : '-'}`;
     if (!force && key === renderedKey) return;
     // Nicht neu zeichnen, während jemand gerade einen Text bearbeitet.
     if (!force && document.activeElement && document.activeElement.classList.contains('sb-text')) return;
@@ -102,7 +116,8 @@
           renderSteps(true);
         }
       }, U.icon(['M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14']));
-      const card = el('li', { class: 'sb-step' + (i === steps.length - 1 && rec ? ' new' : '') },
+      const addedIds = new Set(rec && rec.guideId === guideId ? (rec.added || []).map((a) => a.id) : []);
+      const card = el('li', { class: 'sb-step' + (addedIds.has(s.id) ? ' added' : ''), dataset: { id: String(s.id) } },
         el('div', { class: 'sb-step-head' },
           el('span', { class: 'sb-num' + (isSec ? ' section' : ''), text: isSec ? '§' : String(n) }),
           input, del));
@@ -117,16 +132,29 @@
       if (!isSec && s.unredacted > 0 && !s.reviewed) {
         card.appendChild(el('div', { class: 'sb-flag', text: s.navigated ? 'Seite hat beim Screenshot neu geladen: Schwärzung prüfen.' : 'Ungeschwärzte Eingabefelder: bitte im Editor prüfen.' }));
       }
+      if (!rec) {
+        card.appendChild(el('button', {
+          class: 'sb-insert-here', type: 'button',
+          title: 'Neue Schritte direkt nach diesem aufnehmen',
+          text: '+ Ab hier Schritte aufnehmen',
+          onclick: () => start({ guideId, afterStepId: s.id })
+        }));
+      }
       return card;
     });
     $('sb-steps').replaceChildren(...items);
-    if (rec && rec.guideId === guideId && items.length) items[items.length - 1].scrollIntoView({ block: 'nearest' });
+    // Zum zuletzt aufgenommenen Schritt scrollen (beim Einfügen steht er mitten in der Liste).
+    const lastAdded = rec && rec.guideId === guideId && rec.added && rec.added.length ? rec.added[rec.added.length - 1].id : null;
+    const target = lastAdded ? $('sb-steps').querySelector(`[data-id="${lastAdded}"]`) : null;
+    if (target) target.scrollIntoView({ block: 'nearest' });
   }
 
   async function refresh(force) {
     const r = await U.send({ type: 'status' }).catch(() => null);
     rec = r && r.rec ? r.rec : null;
+    pending = r && r.pendingInsert ? r.pendingInsert : null;
     if (rec) guideId = rec.guideId;
+    else if (pending) guideId = pending.guideId;
     else if (!guideId) {
       const gs = await DB.listGuides();
       guideId = gs.length ? gs[0].id : null;
@@ -135,12 +163,15 @@
     await renderSteps(force);
   }
 
-  async function start() {
+  /** target: { guideId, afterStepId } zum Einfügen; ohne Ziel gilt eine vorgemerkte Einfügestelle. */
+  async function start(target) {
     showError('');
     $('sb-start').disabled = true;
     try {
       const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-      const r = await U.send({ type: 'start', tabId: tab ? tab.id : undefined });
+      const msg = { type: 'start', tabId: tab ? tab.id : undefined };
+      if (target && target.guideId) Object.assign(msg, { guideId: target.guideId, afterStepId: target.afterStepId || 0 });
+      const r = await U.send(msg);
       if (r && r.ok) {
         guideId = r.rec.guideId;
         await refresh(true);
@@ -148,13 +179,19 @@
         $('sb-perm').hidden = false;
       } else {
         showError((r && r.error) || 'Die Aufnahme konnte nicht gestartet werden.');
+        window.scrollTo(0, 0);
       }
     } finally {
       $('sb-start').disabled = false;
     }
   }
 
-  $('sb-start').addEventListener('click', start);
+  $('sb-start').addEventListener('click', () => start());
+  $('sb-all').addEventListener('click', () => api.tabs.create({ url: api.runtime.getURL('src/editor/editor.html') }));
+  $('sb-pending-clear').addEventListener('click', async () => {
+    await U.send({ type: 'clear-insert' });
+    refresh(true);
+  });
   $('sb-settings').addEventListener('click', () => api.runtime.openOptionsPage());
   $('sb-perm-btn').addEventListener('click', async () => {
     try {
@@ -177,7 +214,7 @@
   $('sb-open').addEventListener('click', () => openEditor());
 
   api.storage.onChanged.addListener((changes, area) => {
-    if (area === 'session' && changes.rec) refresh();
+    if (area === 'session' && (changes.rec || changes.pendingInsert)) refresh(!!changes.pendingInsert);
   });
   setInterval(() => { if (rec) $('sb-time').textContent = elapsed(rec); }, 500);
   // Rückfall, falls Änderungen aus dem Editor kommen.
