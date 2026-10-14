@@ -178,7 +178,9 @@ var Exporter = (() => {
       if (!open) { h += `<ol start="${s.n}">`; open = true; }
       const img = imgs.get(s.id);
       h += `<li><p><strong>${esc(s.text)}</strong></p>`;
-      if (img) h += `<p><img src="${esc(img.src)}" alt="Schritt ${s.n}" width="${Math.min(800, img.width)}"></p>`;
+      // Keine feste Breite: die Spalte in Odoo Wissen ist oft schmaler und schneidet das Bild sonst ab.
+      // img-fluid ist Odoos eigene Klasse für mitskalierende Bilder, der Stil greift auch ohne sie.
+      if (img) h += `<p><img class="img-fluid" style="width: 100%; max-width: 100%; height: auto;" src="${esc(img.src)}" alt="Schritt ${s.n}"></p>`;
       if (s.note) h += `<blockquote><p>${esc(s.note)}</p></blockquote>`;
       h += '</li>';
       t += `${s.n}. ${s.text}\n${s.note ? `   Hinweis: ${s.note}\n` : ''}`;

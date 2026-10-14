@@ -352,6 +352,20 @@ function check(cond, msg) {
   check(!results.html.includes('<script>alert(1)') && results.html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'HTML-Export escaped Text');
   check(!/https?:\/\//.test(results.html.replace(/http:\/\/www\.w3\.org\/2000\/svg/g, '')), 'HTML-Export lädt nichts von außen');
   check(results.odooHtml.includes('data:image/webp') || results.odooHtml.includes('data:image/png'), 'Odoo-Export mit eingebetteten Bildern');
+  // Wie in Odoo Wissen: schmale Spalte, Überlauf abgeschnitten. Bilder müssen vollständig hineinpassen.
+  const narrow = await ctx.newPage();
+  await narrow.setContent(`<div id="col" style="width:620px;overflow:hidden">${results.odooHtml}</div>`);
+  await narrow.waitForTimeout(300);
+  const fitInfo = await narrow.evaluate(() => {
+    const col = document.getElementById('col').getBoundingClientRect();
+    return Array.from(document.images).map((im) => {
+      const r = im.getBoundingClientRect();
+      return { right: Math.round(r.right - col.left), w: Math.round(r.width), ratio: +(r.width / r.height).toFixed(2), nat: +(im.naturalWidth / im.naturalHeight).toFixed(2) };
+    });
+  });
+  await narrow.close();
+  check(fitInfo.length > 0 && fitInfo.every((f) => f.right <= 620 && Math.abs(f.ratio - f.nat) < 0.02),
+    'Odoo-Export: Bilder passen in eine schmale Spalte, ohne abgeschnitten oder verzerrt zu werden ' + JSON.stringify(fitInfo.slice(0, 2)));
   check(!results.odooHtml.includes('<script>'), 'Odoo-Export escaped');
   check(results.mdText.includes('\\<script\\>') && results.mdFiles.some((f) => f.startsWith('bilder/')), 'Markdown escaped, Bilder im ZIP');
   check(results.roundtrip, 'Projektsicherung: Export und Import ergeben dieselben Schritte');
