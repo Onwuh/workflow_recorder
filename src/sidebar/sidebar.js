@@ -189,7 +189,7 @@
   $('sb-start').addEventListener('click', () => start());
 
   // Aufnahme-Optionen (gleiche Einstellungen wie Popup und Einstellungsseite)
-  const OPTS = [['sb-opt-redact', 'autoRedact'], ['sb-opt-header', 'redactHeader'], ['sb-opt-keys', 'keySteps']];
+  const OPTS = [['sb-opt-redact', 'autoRedact'], ['sb-opt-keys', 'keySteps']];
   async function renderOpts() {
     const st = await Settings.get();
     for (const [id, key] of OPTS) $(id).checked = st[key];

@@ -20,7 +20,7 @@ Browser-Erweiterung für Chrome und Firefox, die Klick-Abläufe aufzeichnet und 
 
 Schwärzungen sind deckende Balken, kein Weichzeichner. Beim Export und in der Projektsicherung werden sie fest ins Bild gerechnet, das Original gelangt nie in eine exportierte Datei. Damit sich Schwärzungen nachträglich entfernen lassen, liegt der ungeschwärzte Screenshot im lokalen Speicher der Erweiterung (IndexedDB).
 
-Zusätzlich schwärzt die Erweiterung standardmäßig die Odoo-Kopfzeile mit Firmenwechsler und Benutzermenü (Name, Datenbank). Beide Automatiken lassen sich in der Seitenleiste, im Popup und in den Einstellungen abschalten.
+Zusätzlich schwärzt die Erweiterung standardmäßig die Odoo-Kopfzeile mit Firmenwechsler und Benutzermenü (Name, Datenbank). Die automatische Schwärzung lässt sich in der Seitenleiste, im Popup und in den Einstellungen abschalten, die Kopfzeilen-Schwärzung in den Einstellungen.
 
 Bekannte Lücke: Datensatznamen in Breadcrumb, Listenansichten und Chatter erfasst die Automatik nicht zuverlässig. Deshalb bleiben die manuelle Prüfung und die Exportwarnung nötig.
 

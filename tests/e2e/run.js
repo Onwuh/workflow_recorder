@@ -428,18 +428,22 @@ function check(cond, msg) {
   const st = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
   check(st && st.ok && st.rec === null, 'kein Aufnahmezustand übrig');
 
-  // ---------- Kopfzeilen-Schwärzung abschaltbar, Schalter in der Seitenleiste ----------
+  // ---------- Schalter in der Seitenleiste, Kopfzeilen-Schwärzung in den Einstellungen ----------
   const sbOpt = await ctx.newPage();
   await sbOpt.goto(ext('src/sidebar/sidebar.html'));
   await sbOpt.waitForTimeout(700);
-  check(await sbOpt.locator('#sb-opt-redact').isChecked() && await sbOpt.locator('#sb-opt-header').isChecked() && !(await sbOpt.locator('#sb-opt-keys').isChecked()),
-    'Seitenleiste zeigt die Aufnahme-Optionen');
-  await sbOpt.locator('#sb-opt-header').uncheck();
-  await sbOpt.waitForTimeout(300);
-  const hdrOff = await helper.evaluate(() => Settings.get().then((x) => x.redactHeader));
-  check(hdrOff === false, 'Kopfzeilen-Schwärzung über die Seitenleiste abgeschaltet');
+  check(await sbOpt.locator('#sb-opt-redact').isChecked() && !(await sbOpt.locator('#sb-opt-keys').isChecked()) &&
+    (await sbOpt.locator('#sb-opt-header').count()) === 0, 'Seitenleiste zeigt Schwärzen und Tastatureingaben, Kopfzeile nur in den Einstellungen');
   await sbOpt.screenshot({ path: path.join(OUT, 'seitenleiste-optionen.png') });
   await sbOpt.close();
+  const optP = await ctx.newPage();
+  await optP.goto(ext('src/options/options.html'));
+  await optP.waitForTimeout(500);
+  await optP.locator('#redactHeader').uncheck();
+  await optP.waitForTimeout(300);
+  await optP.close();
+  const hdrOff = await helper.evaluate(() => Settings.get().then((x) => x.redactHeader));
+  check(hdrOff === false, 'Kopfzeilen-Schwärzung in den Einstellungen abgeschaltet');
   await page.bringToFront();
   const hdrRec = await helper.evaluate((t) => chrome.runtime.sendMessage({ type: 'start', tabId: t }), tabId);
   await page.click('#confirm');

@@ -83,7 +83,7 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Standardliste: `partner_id, partner_invoice_id, partner_shipping_id, commercial_partner_id, email, email_from, phone, mobile, vat, street, street2, zip, city, bank_account_id, partner_bank_id, acc_number`.
 - Einstellung `autoRedact` (Standard an) in `chrome.storage.local`.
 - Einstellung `redactHeader` (Standard an): Odoo-Kopfzeile schwärzen, `.o_switch_company_menu` und `.o_user_menu` (Firma, Name, Avatar, Datenbank).
-- Die Schalter `autoRedact`, `redactHeader`, `keySteps` stehen in Seitenleiste, Popup und Einstellungen.
+- Die Schalter `autoRedact` und `keySteps` stehen in Seitenleiste, Popup und Einstellungen; `redactHeader` nur in den Einstellungen.
 
 **Schritttexte**
 - Feldbeschriftung über `label[for=<input id>]`. Odoo-Labels enden teils mit einem Tooltip-„?“, das entfernt werden muss.
