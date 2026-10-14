@@ -15,6 +15,7 @@ var Settings = (() => {
   const DEFAULTS = Object.freeze({
     autoRedact: true,
     keySteps: false,
+    redactHeader: true,
     openSidebar: true,
     fields: DEFAULT_FIELDS,
     footer: ''
@@ -40,6 +41,7 @@ var Settings = (() => {
       autoRedact: typeof s.autoRedact === 'boolean' ? s.autoRedact : DEFAULTS.autoRedact,
       keySteps: typeof s.keySteps === 'boolean' ? s.keySteps : DEFAULTS.keySteps,
       openSidebar: typeof s.openSidebar === 'boolean' ? s.openSidebar : DEFAULTS.openSidebar,
+      redactHeader: typeof s.redactHeader === 'boolean' ? s.redactHeader : DEFAULTS.redactHeader,
       fields: s.fields === undefined ? DEFAULT_FIELDS.slice() : sanitizeFields(s.fields),
       footer: typeof s.footer === 'string' ? s.footer.slice(0, 200) : ''
     };

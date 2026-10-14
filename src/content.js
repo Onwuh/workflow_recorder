@@ -11,7 +11,7 @@
   const api = globalThis.browser ?? globalThis.chrome;
   const MAX_TEXT = 60;
 
-  let state = { recording: false, paused: false, autoRedact: true, keySteps: false, fields: [] };
+  let state = { recording: false, paused: false, autoRedact: true, keySteps: false, redactHeader: true, fields: [] };
   let lastStepAt = 0;
   let busy = false;
 
@@ -24,6 +24,7 @@
       paused: msg.paused === true,
       autoRedact: msg.autoRedact !== false,
       keySteps: msg.keySteps === true,
+      redactHeader: msg.redactHeader !== false,
       fields: Array.isArray(msg.fields) ? msg.fields.filter((f) => typeof f === 'string' && /^[A-Za-z_][A-Za-z0-9_.]{0,63}$/.test(f)) : []
     };
   }
@@ -293,11 +294,17 @@
   // Der Hintergrund fragt direkt vor und nach dem Screenshot die zu schwärzenden Flächen ab.
   // Gespeichert werden Rechtecke; fest ins Bild gerechnet wird erst beim Export.
 
+  const HEADER_SELECTORS = ['.o_switch_company_menu', '.o_user_menu', '.o_menu_systray .o_company_name', '.oe_topbar_name'];
+
   function redactSelector() {
     const parts = ['input[type="email" i]', 'input[type="tel" i]', 'input[type="password" i]', 'input[autocomplete^="cc-"]'];
     for (const f of state.fields) {
       const n = CSS.escape(f);
       parts.push(`.o_field_widget[name="${n}"]`, `td[name="${n}"]`);
+    }
+    if (state.redactHeader) {
+      // Odoo-Kopfzeile: Firmenwechsler und Benutzermenü (Name, Avatar, Datenbank).
+      parts.push(...HEADER_SELECTORS);
     }
     return parts.join(',');
   }

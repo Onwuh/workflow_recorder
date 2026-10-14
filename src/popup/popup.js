@@ -53,6 +53,7 @@
     const s = await Settings.get();
     $('opt-redact').checked = s.autoRedact;
     $('opt-keys').checked = s.keySteps;
+    $('opt-header').checked = s.redactHeader;
 
     await checkPermission();
     await renderRecent();
@@ -252,6 +253,10 @@
   $('link-all').addEventListener('click', (e) => { e.preventDefault(); openPage('src/editor/editor.html'); });
   $('opt-redact').addEventListener('change', async (e) => {
     await Settings.set({ autoRedact: e.target.checked });
+    U.send({ type: 'settings-changed' });
+  });
+  $('opt-header').addEventListener('change', async (e) => {
+    await Settings.set({ redactHeader: e.target.checked });
     U.send({ type: 'settings-changed' });
   });
   $('opt-keys').addEventListener('change', async (e) => {
