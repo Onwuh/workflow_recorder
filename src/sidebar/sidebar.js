@@ -187,6 +187,21 @@
   }
 
   $('sb-start').addEventListener('click', () => start());
+
+  // Aufnahme-Optionen (gleiche Einstellungen wie Popup und Einstellungsseite)
+  const OPTS = [['sb-opt-redact', 'autoRedact'], ['sb-opt-keys', 'keySteps']];
+  async function renderOpts() {
+    const st = await Settings.get();
+    for (const [id, key] of OPTS) $(id).checked = st[key];
+  }
+  for (const [id, key] of OPTS) {
+    $(id).addEventListener('change', async (e) => {
+      await Settings.set({ [key]: e.target.checked });
+      U.send({ type: 'settings-changed' }).catch(() => {});
+    });
+  }
+  api.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.settings) renderOpts(); });
+  renderOpts();
   $('sb-all').addEventListener('click', () => api.tabs.create({ url: api.runtime.getURL('src/editor/editor.html') }));
   $('sb-pending-clear').addEventListener('click', async () => {
     await U.send({ type: 'clear-insert' });

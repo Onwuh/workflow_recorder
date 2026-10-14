@@ -82,6 +82,8 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Selektoren: `.o_field_widget[name="…"]` und `td[name="…"]` (Odoo-Listen) für eine konfigurierbare Feldliste, dazu `input[type=email|tel|password]`.
 - Standardliste: `partner_id, partner_invoice_id, partner_shipping_id, commercial_partner_id, email, email_from, phone, mobile, vat, street, street2, zip, city, bank_account_id, partner_bank_id, acc_number`.
 - Einstellung `autoRedact` (Standard an) in `chrome.storage.local`.
+- Einstellung `redactHeader` (Standard an): Odoo-Kopfzeile schwärzen, `.o_switch_company_menu` und `.o_user_menu` (Firma, Name, Avatar, Datenbank).
+- Die Schalter `autoRedact` und `keySteps` stehen in Seitenleiste, Popup und Einstellungen; `redactHeader` nur in den Einstellungen.
 
 **Schritttexte**
 - Feldbeschriftung über `label[for=<input id>]`. Odoo-Labels enden teils mit einem Tooltip-„?“, das entfernt werden muss.
@@ -89,7 +91,7 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 - Texte auf 60 Zeichen kürzen.
 
 **Odoo-Wissen-Export**
-- Getestet am 2026-10-12: eingefügte Bilder bleiben als `data:image/…;base64` im Artikeltext, sie werden nicht zu Anhängen. Deshalb maximal 1000 px Breite, WebP. Zuschneiden auf den Klickbereich nicht voreinstellen, das wirkt im Artikel gezoomt.
+- Getestet am 2026-10-12: eingefügte Bilder bleiben als `data:image/…;base64` im Artikeltext, sie werden nicht zu Anhängen. Deshalb maximal 1000 px Breite, WebP. Zuschneiden auf den Klickbereich nicht voreinstellen, das wirkt im Artikel gezoomt. Bilder ohne feste Breite einfügen (`class="img-fluid"`, `style="width: 100%; max-width: 100%; height: auto"`), sonst schneidet die schmalere Artikelspalte sie rechts ab.
 - Zwischenablage mit `ClipboardItem` (`text/html` und `text/plain`). Fallback: Inhalt markieren und `document.execCommand('copy')`.
 - Testseite: `docs/tests/odoo-paste-test.html` (Seiteninhalt eines Claude-Artifacts, ohne eigenes `<html>`-Gerüst).
 

@@ -18,6 +18,7 @@
     const s = await Settings.get();
     $('autoRedact').checked = s.autoRedact;
     $('keySteps').checked = s.keySteps;
+    $('redactHeader').checked = s.redactHeader;
     $('openSidebar').checked = s.openSidebar;
     $('fields').value = s.fields.join('\n');
     $('footer').value = s.footer;
@@ -30,6 +31,7 @@
 
   $('autoRedact').addEventListener('change', async (e) => { await Settings.set({ autoRedact: e.target.checked }); notify(); });
   $('keySteps').addEventListener('change', async (e) => { await Settings.set({ keySteps: e.target.checked }); notify(); });
+  $('redactHeader').addEventListener('change', async (e) => { await Settings.set({ redactHeader: e.target.checked }); notify(); });
   $('openSidebar').addEventListener('change', async (e) => { await Settings.set({ openSidebar: e.target.checked }); });
 
   $('fields-save').addEventListener('click', async () => {

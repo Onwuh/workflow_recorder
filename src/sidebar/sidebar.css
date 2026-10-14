@@ -50,3 +50,5 @@ body.sb { background: var(--bg); min-height: 100vh; display: flex; flex-directio
   font-size: 12px; color: var(--fg-2); min-height: 30px; padding: 0 10px;
 }
 .sb-insert-here:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+.sb-opts { margin-top: 14px; }

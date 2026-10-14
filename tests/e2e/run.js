@@ -52,7 +52,7 @@ function check(cond, msg) {
   const guideId = start.rec.guideId;
 
   // Feldpositionen vor den Klicks (der Wizard-Button scrollt die Seite später)
-  const rects = await page.evaluate(() => ['#partner_id_0', '#email_0', '#qty_0', '#rowcell'].map((s) => {
+  const rects = await page.evaluate(() => ['#partner_id_0', '#email_0', '#qty_0', '#rowcell', '#company', '#usermenu'].map((s) => {
     const r = document.querySelector(s).getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }));
@@ -97,9 +97,10 @@ function check(cond, msg) {
   check(dark(px[1]), 'E-Mail-Feld im Export geschwärzt ' + px[1]);
   check(!dark(px[2]), 'Mengenfeld nicht geschwärzt ' + px[2]);
   check(dark(px[3]), 'Listenzelle partner_id im Export geschwärzt ' + px[3]);
+  check(dark(px[4]) && dark(px[5]), `Firma und Benutzermenü/Datenbank in der Kopfzeile geschwärzt (${px[4]} / ${px[5]})`);
   check(!dark(raw[0]), 'gespeichertes Original bleibt erhalten (Schwärzung entfernbar)');
   const nRed = await helper.evaluate((g) => DB.getSteps(g).then((s) => s[0].redactions.length), guideId);
-  check(nRed === 4, `vier Schwärzungsflächen am Schritt (Kunde, E-Mail-Widget, E-Mail-Input, Listenzelle: ${nRed})`);
+  check(nRed === 6, `sechs Schwärzungsflächen am Schritt (Kunde, E-Mail-Widget, E-Mail-Input, Listenzelle, Firma, Benutzermenü: ${nRed})`);
 
   // Wizard: Felder im Dialog geschwärzt, Balken der Seite dahinter nicht über dem Dialog.
   const wiz = await page.evaluate(() => {
@@ -163,7 +164,7 @@ function check(cond, msg) {
   await editor.mouse.move(box.x + 120, box.y + 60, { steps: 5 });
   await editor.mouse.up();
   await editor.waitForTimeout(600);
-  const red0 = 4;
+  const red0 = 6;
   const red = await editor.evaluate(async () => {
     const s = Editor.state.steps[0];
     const fresh = await DB.getStep(s.id);
@@ -352,6 +353,20 @@ function check(cond, msg) {
   check(!results.html.includes('<script>alert(1)') && results.html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'HTML-Export escaped Text');
   check(!/https?:\/\//.test(results.html.replace(/http:\/\/www\.w3\.org\/2000\/svg/g, '')), 'HTML-Export lädt nichts von außen');
   check(results.odooHtml.includes('data:image/webp') || results.odooHtml.includes('data:image/png'), 'Odoo-Export mit eingebetteten Bildern');
+  // Wie in Odoo Wissen: schmale Spalte, Überlauf abgeschnitten. Bilder müssen vollständig hineinpassen.
+  const narrow = await ctx.newPage();
+  await narrow.setContent(`<div id="col" style="width:620px;overflow:hidden">${results.odooHtml}</div>`);
+  await narrow.waitForTimeout(300);
+  const fitInfo = await narrow.evaluate(() => {
+    const col = document.getElementById('col').getBoundingClientRect();
+    return Array.from(document.images).map((im) => {
+      const r = im.getBoundingClientRect();
+      return { right: Math.round(r.right - col.left), w: Math.round(r.width), ratio: +(r.width / r.height).toFixed(2), nat: +(im.naturalWidth / im.naturalHeight).toFixed(2) };
+    });
+  });
+  await narrow.close();
+  check(fitInfo.length > 0 && fitInfo.every((f) => f.right <= 620 && Math.abs(f.ratio - f.nat) < 0.02),
+    'Odoo-Export: Bilder passen in eine schmale Spalte, ohne abgeschnitten oder verzerrt zu werden ' + JSON.stringify(fitInfo.slice(0, 2)));
   check(!results.odooHtml.includes('<script>'), 'Odoo-Export escaped');
   check(results.mdText.includes('\\<script\\>') && results.mdFiles.some((f) => f.startsWith('bilder/')), 'Markdown escaped, Bilder im ZIP');
   check(results.roundtrip, 'Projektsicherung: Export und Import ergeben dieselben Schritte');
@@ -412,6 +427,31 @@ function check(cond, msg) {
 
   const st = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'status' }));
   check(st && st.ok && st.rec === null, 'kein Aufnahmezustand übrig');
+
+  // ---------- Schalter in der Seitenleiste, Kopfzeilen-Schwärzung in den Einstellungen ----------
+  const sbOpt = await ctx.newPage();
+  await sbOpt.goto(ext('src/sidebar/sidebar.html'));
+  await sbOpt.waitForTimeout(700);
+  check(await sbOpt.locator('#sb-opt-redact').isChecked() && !(await sbOpt.locator('#sb-opt-keys').isChecked()) &&
+    (await sbOpt.locator('#sb-opt-header').count()) === 0, 'Seitenleiste zeigt Schwärzen und Tastatureingaben, Kopfzeile nur in den Einstellungen');
+  await sbOpt.screenshot({ path: path.join(OUT, 'seitenleiste-optionen.png') });
+  await sbOpt.close();
+  const optP = await ctx.newPage();
+  await optP.goto(ext('src/options/options.html'));
+  await optP.waitForTimeout(500);
+  await optP.locator('#redactHeader').uncheck();
+  await optP.waitForTimeout(300);
+  await optP.close();
+  const hdrOff = await helper.evaluate(() => Settings.get().then((x) => x.redactHeader));
+  check(hdrOff === false, 'Kopfzeilen-Schwärzung in den Einstellungen abgeschaltet');
+  await page.bringToFront();
+  const hdrRec = await helper.evaluate((t) => chrome.runtime.sendMessage({ type: 'start', tabId: t }), tabId);
+  await page.click('#confirm');
+  await page.waitForTimeout(1200);
+  const hdrStep = await helper.evaluate((g) => DB.getSteps(g).then((x) => x[x.length - 1].redactions.length), hdrRec.rec.guideId);
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop', openEditor: false }));
+  check(hdrStep === 4, `ohne Kopfzeilen-Schwärzung nur die Feld-Schwärzungen (${hdrStep})`);
+  await helper.evaluate(() => Settings.set({ redactHeader: true }));
 
   // ---------- Schritte einfügen ----------
   await page.bringToFront();

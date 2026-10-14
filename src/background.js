@@ -48,6 +48,7 @@ async function contentState(rec) {
     paused: !!(rec && rec.paused),
     autoRedact: settings.autoRedact,
     keySteps: settings.keySteps,
+    redactHeader: settings.redactHeader,
     fields: settings.fields
   };
 }
