@@ -13,6 +13,11 @@
     { id: 'odoo', label: 'Odoo Wissen', hint: 'Kopieren und in einen Artikel einfügen', cta: 'In Zwischenablage kopieren', badge: 'Odoo' },
     { id: 'md', label: 'Markdown', hint: 'Text plus Bilderordner als ZIP', cta: 'ZIP herunterladen', badge: 'MD' }
   ];
+  // Testchecklisten: der Kunde hakt in Odoo ab. Kein HTML und kein PDF.
+  const CHECK_FORMATS = [
+    { id: 'odoo', label: 'Odoo Wissen', hint: 'Checkliste zum Abhaken im Artikel', cta: 'In Zwischenablage kopieren', badge: 'Odoo' },
+    { id: 'md', label: 'Markdown', hint: 'Checkliste plus Bilderordner als ZIP', cta: 'ZIP herunterladen', badge: 'MD' }
+  ];
   const MAX_LOGO = 5 * 1024 * 1024;
 
   let picked = 'html';
@@ -22,29 +27,34 @@
   const cropByFormat = { html: false, pdf: false, odoo: false, md: false };
 
   function opts() {
-    return { cover: $('ex-cover').checked, marker: $('ex-marker').checked, crop: $('ex-crop').checked };
+    return { cover: $('ex-cover').checked, marker: $('ex-marker').checked, crop: $('ex-crop').checked, images: $('ex-shots').checked };
   }
 
   function guide() { return Editor.state.guide; }
+  const isCheck = () => guide().kind === 'checklist';
+  const formats = () => (isCheck() ? CHECK_FORMATS : FORMATS);
 
   function status(msg) { $('ex-status').textContent = msg || ''; }
 
   function renderFormats() {
-    $('ex-formats').replaceChildren(...FORMATS.map((f) => el('button', {
+    $('ex-formats').replaceChildren(...formats().map((f) => el('button', {
       class: 'fmt', type: 'button', role: 'radio', 'aria-checked': f.id === picked ? 'true' : 'false',
       onclick: () => pick(f.id)
     }, el('span', { class: 'l', text: f.label }), el('span', { class: 'h', text: f.hint }))));
   }
 
   function pick(id) {
+    if (!formats().some((f) => f.id === id)) id = formats()[0].id;
     picked = id;
     renderFormats();
     $('ex-crop').checked = cropByFormat[id];
     $('ex-odoo').hidden = id !== 'odoo';
     // Titelseite gibt es nur in HTML und PDF.
     $('ex-cover').parentElement.hidden = !(id === 'html' || id === 'pdf');
+    $('ex-shots').parentElement.hidden = !isCheck();
+    renderShots();
     renderLogo();
-    $('ex-go').textContent = FORMATS.find((f) => f.id === id).cta;
+    $('ex-go').textContent = formats().find((f) => f.id === id).cta;
     status('');
     if (id === 'odoo') prepareOdoo();
   }
@@ -52,9 +62,18 @@
   function renderWarn() {
     const flagged = Editor.state.steps.filter((s) => s.type !== 'section' && s.unredacted > 0 && !s.reviewed).length;
     $('ex-warn').hidden = flagged === 0;
+    const one = isCheck() ? 'Prüfpunkt' : 'Schritt';
+    const many = isCheck() ? 'Prüfpunkte' : 'Schritte';
     $('ex-warn-text').textContent = flagged === 1
-      ? '1 Schritt enthält ungeschwärzte Eingabefelder.'
-      : `${flagged} Schritte enthalten ungeschwärzte Eingabefelder.`;
+      ? `1 ${one} enthält ungeschwärzte Eingabefelder.`
+      : `${flagged} ${many} enthalten ungeschwärzte Eingabefelder.`;
+  }
+
+  /** Ohne Screenshots sind Klickpunkt und Zuschnitt bedeutungslos. */
+  function renderShots() {
+    const off = isCheck() && !$('ex-shots').checked;
+    $('ex-marker').parentElement.hidden = off;
+    $('ex-crop').parentElement.hidden = off;
   }
 
   let logoUrl = null;
@@ -90,11 +109,14 @@
 
   function prepareOdoo() {
     const o = opts();
-    $('ex-size-label').textContent = o.crop ? 'Bilder zugeschnitten, max. 1000 px, WebP' : 'Bilder max. 1000 px breit, WebP';
-    const key = JSON.stringify([o.marker, o.crop]);
+    const check = isCheck();
+    $('ex-size-label').textContent = check
+      ? (!o.images ? 'Ohne Bilder' : o.crop ? 'Kleine Bilder, zugeschnitten, WebP' : 'Kleine Bilder, max. 480 px breit, WebP')
+      : (o.crop ? 'Bilder zugeschnitten, max. 1000 px, WebP' : 'Bilder max. 1000 px breit, WebP');
+    const key = JSON.stringify([check, o.marker, o.crop, o.images]);
     if (odooPrep && odooPrep.key === key) return odooPrep.promise;
     $('ex-size').textContent = '…';
-    const promise = Editor.flushSaves().then(() => Exporter.odoo(guide().id, o));
+    const promise = Editor.flushSaves().then(() => (check ? Exporter.odooChecklist(guide().id, o) : Exporter.odoo(guide().id, o)));
     odooPrep = { key, promise };
     promise.then((r) => {
       if (odooPrep && odooPrep.promise === promise) $('ex-size').textContent = kb(r.bytes);
@@ -112,7 +134,7 @@
 
   async function go() {
     if (busy) return;
-    const fmt = FORMATS.find((f) => f.id === picked);
+    const fmt = formats().find((f) => f.id === picked);
     const o = opts();
     const title = U.safeFilename(guide().title);
     const progress = (n) => status(`Bilder werden vorbereitet … ${n}`);
@@ -125,7 +147,9 @@
         const r = await prepareOdoo();
         const ok = await Exporter.copyToClipboard(r.html, r.text);
         if (ok) {
-          status('Kopiert. Jetzt in Odoo Wissen in einen leeren Artikel einfügen.');
+          status(isCheck()
+            ? 'Kopiert. Jetzt in Odoo Wissen in einen leeren Artikel einfügen und den Artikel für den Kunden freigeben.'
+            : 'Kopiert. Jetzt in Odoo Wissen in einen leeren Artikel einfügen.');
           markExported(fmt.badge);
         } else {
           status('Kopieren wurde vom Browser blockiert. Bitte erneut versuchen.');
@@ -151,7 +175,7 @@
         U.download(blob, `${title}.pdf`);
         status('PDF-Datei gespeichert.');
       } else if (picked === 'md') {
-        const blob = await Exporter.markdown(guide().id, o, progress);
+        const blob = isCheck() ? await Exporter.markdownChecklist(guide().id, o, progress) : await Exporter.markdown(guide().id, o, progress);
         U.download(blob, `${title} (Markdown).zip`);
         status('ZIP-Datei gespeichert.');
       }
@@ -167,11 +191,18 @@
   function open() {
     if (!Editor.state.guide) return;
     const g = guide();
-    $('ex-sub').textContent = `${g.title} · ${U.stepsLabel(Editor.state.steps.filter((s) => s.type !== 'section').length)}`;
+    const items = Editor.state.steps.filter((s) => s.type !== 'section');
+    const n = items.length;
+    $('ex-title').textContent = isCheck() ? 'Checkliste exportieren' : 'Anleitung exportieren';
+    $('ex-sub').textContent = `${g.title} · ${isCheck() ? (n === 1 ? '1 Prüfpunkt' : `${n} Prüfpunkte`) : U.stepsLabel(n)}`;
     $('ex-paste-key').textContent = U.isMac() ? '⌘ V' : 'Strg + V';
     odooPrep = null;
     renderWarn();
     pick(picked);
+    if (isCheck()) {
+      const open = items.filter((s) => !s.expected).length;
+      if (open) status(open === 1 ? '1 Prüfpunkt hat noch kein erwartetes Ergebnis.' : `${open} Prüfpunkte haben noch kein erwartetes Ergebnis.`);
+    }
     dlg.showModal();
   }
 
@@ -185,6 +216,7 @@
     if (picked === 'odoo') prepareOdoo();
   });
   $('ex-marker').addEventListener('change', () => { if (picked === 'odoo') prepareOdoo(); });
+  $('ex-shots').addEventListener('change', () => { renderShots(); if (picked === 'odoo') prepareOdoo(); });
   $('ex-logo-file').addEventListener('change', (e) => { setLogo(e.target.files[0]); e.target.value = ''; });
   $('ex-logo-remove').addEventListener('click', async () => {
     await DB.updateGuide(guide().id, { logo: null });

@@ -41,10 +41,11 @@
       </a>
       <div class="titles">
         <input id="ed-title" class="title-input" type="text" maxlength="200" aria-label="Titel der Anleitung">
-        <span id="ed-meta" class="h-meta"></span>
+        <span class="h-meta"><span id="ed-kind" class="kind-badge" hidden>Testcheckliste</span><span id="ed-meta"></span></span>
       </div>
     </div>
     <div class="topbar-actions">
+      <button id="ed-to-check" class="btn" type="button" hidden title="Neue Testcheckliste aus diesem Klickweg erstellen">Als Checkliste kopieren</button>
       <button id="ed-backup" class="btn" type="button" title="Projekt als ZIP sichern">Projekt sichern</button>
       <button id="ed-preview" class="btn" type="button">Vorschau</button>
       <button id="ed-export" class="btn btn-primary" type="button">Exportieren</button>
@@ -54,9 +55,19 @@
   <div class="ed-body">
     <nav class="ed-nav" aria-label="Schritte">
       <label class="field intro">
-        Einleitung
+        <span id="ed-intro-label">Einleitung</span>
         <textarea id="ed-intro" class="textarea" rows="3" maxlength="5000" placeholder="Worum geht es in dieser Anleitung?"></textarea>
       </label>
+      <div id="ed-test" class="test-info" hidden>
+        <label class="field">
+          Vorbedingungen
+          <textarea id="ed-pre" class="textarea" rows="2" maxlength="2000" placeholder="z. B. Benutzer mit Recht „Verkauf: Administrator“, Testdatenbank"></textarea>
+        </label>
+        <label class="field">
+          Testdaten
+          <textarea id="ed-data" class="textarea" rows="2" maxlength="2000" placeholder="z. B. ein Testkunde mit Adresse, ein Produkt mit Preis"></textarea>
+        </label>
+      </div>
       <div id="ed-steps" class="step-list" role="listbox" aria-label="Schritte"></div>
       <button id="ed-add-section" class="add-section" type="button">+ Hinweis oder Abschnitt einfügen</button>
     </nav>
@@ -70,6 +81,17 @@
             <span id="ed-text-label">Schritttext</span>
             <input id="ed-text" class="input step-text" type="text" maxlength="200">
           </label>
+        </div>
+
+        <div id="ed-exp-wrap" class="exp-wrap" hidden>
+          <label class="field">
+            <span>Erwartetes Ergebnis</span>
+            <textarea id="ed-expected" class="textarea" rows="2" maxlength="300" placeholder="Was soll der Kunde nach diesem Schritt sehen?"></textarea>
+          </label>
+          <div id="ed-suggest" class="suggest" hidden>
+            <span>Vorschlag aus der Aufnahme:</span>
+            <button id="ed-suggest-btn" class="chip" type="button" title="Als erwartetes Ergebnis übernehmen"></button>
+          </div>
         </div>
 
         <div id="ed-warn" class="warn" hidden>
@@ -183,6 +205,7 @@
         </label>
         <button id="ex-logo-remove" class="btn-link" type="button" hidden>Entfernen</button>
       </div>
+      <label class="check" hidden><input id="ex-shots" type="checkbox" checked> Kleine Screenshots einfügen</label>
       <label class="check"><input id="ex-marker" type="checkbox" checked> Klickpunkt im Screenshot markieren</label>
       <label class="check"><input id="ex-crop" type="checkbox"> Screenshots auf Klickbereich zuschneiden</label>
       <div id="ex-warn" class="warn" hidden>
@@ -195,6 +218,38 @@
     <div class="ex-actions">
       <button id="ex-cancel" class="btn" type="button">Abbrechen</button>
       <button id="ex-go" class="btn btn-primary" type="button">HTML herunterladen</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Klickweg als Checkliste kopieren -->
+<dialog id="convert" class="export convert" aria-labelledby="cv-title">
+  <form method="dialog" class="ex-form">
+    <div class="ex-head">
+      <div class="ex-titles">
+        <h2 id="cv-title">Als Testcheckliste kopieren</h2>
+        <span id="cv-sub" class="h-meta"></span>
+      </div>
+      <button id="cv-close" class="btn-icon" type="button" aria-label="Schließen">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </div>
+    <div class="ex-opts">
+      <label class="field">
+        Titel
+        <input id="cv-name" class="input" type="text" maxlength="200">
+      </label>
+      <fieldset class="cv-group">
+        <legend>Welche Schritte werden Prüfpunkte?</legend>
+        <label class="check"><input type="radio" name="cv-which" value="all" checked> <span id="cv-all">Alle Schritte</span></label>
+        <label class="check"><input id="cv-changes" type="radio" name="cv-which" value="changes"> <span id="cv-changes-label">Nur Schritte mit Statuswechsel oder Dialog</span></label>
+      </fieldset>
+      <label class="check"><input id="cv-suggest" type="checkbox" checked> Vorschläge aus der Aufnahme als erwartetes Ergebnis übernehmen</label>
+      <p class="ex-status">Abschnitte werden zu Testfällen. Der Klickweg bleibt unverändert.</p>
+    </div>
+    <div class="ex-actions">
+      <button id="cv-cancel" class="btn" type="button">Abbrechen</button>
+      <button id="cv-go" class="btn btn-primary" type="button">Checkliste erstellen</button>
     </div>
   </form>
 </dialog>

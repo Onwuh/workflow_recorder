@@ -526,6 +526,137 @@ function check(cond, msg) {
   const secondText = await editor.locator('#ed-steps .step-btn').nth(1).locator('.t').textContent();
   check(selText === 'Klicke auf „Bestätigen“' && secondText === selText, 'nach dem Stopp ist der eingefügte Schritt ohne Neuladen ausgewählt');
 
+  // ---------- Testcheckliste ----------
+  const sbMode = await ctx.newPage();
+  await sbMode.setViewportSize({ width: 380, height: 900 });
+  await sbMode.goto(ext('src/sidebar/sidebar.html'));
+  await sbMode.waitForTimeout(700);
+  await sbMode.click('[data-mode="checklist"]');
+  await sbMode.waitForTimeout(300);
+  check((await sbMode.locator('#sb-start-label').textContent()) === 'Checkliste aufnehmen' &&
+    (await helper.evaluate(() => Settings.get().then((x) => x.mode))) === 'checklist', 'Seitenleiste: Art „Testcheckliste“ gewählt und gespeichert');
+  await sbMode.screenshot({ path: path.join(OUT, 'seitenleiste-modus.png') });
+
+  // Status zurück auf „Angebot“, damit „Bestätigen“ ihn wechselt.
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll('.o_statusbar_status button')) {
+      b.classList.toggle('o_arrow_button_current', b.id === 'st-quote');
+      b.setAttribute('aria-checked', b.id === 'st-quote' ? 'true' : 'false');
+    }
+    document.getElementById('wizard').hidden = true;
+    document.getElementById('wiz-bg').hidden = true;
+  });
+  await page.bringToFront();
+  const cl = await helper.evaluate((t) => chrome.runtime.sendMessage({ type: 'start', tabId: t }), tabId);
+  const clGuide = await helper.evaluate((g) => DB.getGuide(g), cl.rec.guideId);
+  check(cl.ok && clGuide.kind === 'checklist' && clGuide.title.startsWith('Neue Checkliste'), 'Aufnahme legt eine Testcheckliste an');
+  await page.click('#confirm');
+  await page.waitForTimeout(900);
+  await page.click('#open-wizard');
+  await page.waitForTimeout(900);
+  const cp = await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'checkpoint' }));
+  check(cp && cp.ok, 'Prüfpunkt ohne Klick aufgenommen ' + JSON.stringify(cp && (cp.error || cp.reason || 'ok')));
+  await page.waitForTimeout(2500);
+  const clSteps = await helper.evaluate((g) => DB.getSteps(g).then((x) => x.map((s) => ({
+    id: s.id, text: s.text, kind: s.kind, suggest: s.suggest || '', showMarker: s.showMarker, red: s.redactions.length
+  }))), cl.rec.guideId);
+  console.log(clSteps);
+  check(clSteps.length === 3, `drei Prüfpunkte (${clSteps.length})`);
+  check(clSteps[0].suggest === 'Status wechselt auf „Verkaufsauftrag“', 'Vorschlag aus dem Statuswechsel');
+  check(clSteps[1].suggest === 'Dialog „Assistent“ öffnet sich', 'Vorschlag aus dem geöffneten Dialog');
+  check(clSteps[2].kind === 'check' && clSteps[2].showMarker === false && clSteps[2].red > 0, 'Prüfpunkt ohne Klickmarker, aber mit Schwärzung');
+
+  // Seitenleiste während der Aufnahme: Feld „Erwartet“ und Vorschlag übernehmen
+  await sbMode.reload();
+  await sbMode.waitForTimeout(900);
+  check(!(await sbMode.locator('#sb-check').isHidden()) && (await sbMode.locator('#sb-count-label').textContent()) === 'Prüfpunkte erfasst',
+    'Seitenleiste zeigt „Prüfpunkt ohne Klick setzen“');
+  check(await sbMode.locator('.sb-exp').count() === 3 && await sbMode.locator('.sb-chip').count() === 2, 'Seitenleiste: Feld „Erwartet“ je Prüfpunkt und zwei Vorschläge');
+  await sbMode.screenshot({ path: path.join(OUT, 'seitenleiste-checkliste.png') });
+  await sbMode.locator('.sb-chip').first().click();
+  await sbMode.locator('.sb-exp').nth(2).fill('Rechnung im Status „Entwurf“');
+  await sbMode.waitForTimeout(800);
+  await page.bringToFront();
+  await helper.evaluate(() => chrome.runtime.sendMessage({ type: 'stop', openEditor: false }));
+  const expd = await helper.evaluate((g) => DB.getSteps(g).then((x) => x.map((s) => s.expected || '')), cl.rec.guideId);
+  check(expd[0] === 'Status wechselt auf „Verkaufsauftrag“' && expd[1] === '' && expd[2] === 'Rechnung im Status „Entwurf“', 'erwartete Ergebnisse gespeichert ' + JSON.stringify(expd));
+  await sbMode.close();
+
+  // Editor der Checkliste
+  const ce = await ctx.newPage();
+  await ce.setViewportSize({ width: 1440, height: 980 });
+  await ce.goto(ext(`src/editor/editor.html?guide=${cl.rec.guideId}`));
+  await ce.waitForTimeout(800);
+  check(!(await ce.locator('#ed-kind').isHidden()) && !(await ce.locator('#ed-test').isHidden()) && (await ce.locator('#ed-to-check').isHidden()) &&
+    (await ce.locator('#ed-text-label').textContent()) === 'Aktion', 'Editor zeigt Checkliste mit Testinfo und Feld „Aktion“');
+  check(await ce.locator('#ed-steps .flag.open').count() === 1, 'Editor markiert den Prüfpunkt ohne erwartetes Ergebnis');
+  await ce.locator('#ed-steps .step-btn').nth(1).click();
+  await ce.click('#ed-suggest-btn');
+  await ce.fill('#ed-pre', 'Benutzer mit Verkaufsrechten');
+  await ce.waitForTimeout(800);
+  check(await ce.locator('#ed-steps .flag.open').count() === 0, 'Vorschlag im Editor übernommen');
+  await ce.screenshot({ path: path.join(OUT, 'editor-checkliste.png') });
+  const odooCl = await helper.evaluate((g) => Exporter.odooChecklist(g, { marker: true, crop: false, images: true }), cl.rec.guideId);
+  const imgCount = (odooCl.html.match(/<img /g) || []).length;
+  check(odooCl.html.includes('<ul class="o_checklist"><li><strong>1. Klicke auf „Bestätigen“</strong><br>Erwartet: Status wechselt auf „Verkaufsauftrag“') &&
+    odooCl.html.includes('Benutzer mit Verkaufsrechten') && odooCl.html.includes('<h3>Abnahme</h3>') && imgCount === 3 &&
+    !/Beispielkunde|kunde@example|GEHEIM/.test(odooCl.html), `Odoo-Checkliste mit Haken, Erwartung, Testinfo, ${imgCount} Bildern und ohne Kundendaten`);
+  const odooWidth = await helper.evaluate(async (src) => {
+    const bin = atob(src.split(',')[1]);
+    const bmp = await createImageBitmap(new Blob([Uint8Array.from(bin, (c) => c.charCodeAt(0))], { type: 'image/webp' }));
+    return bmp.width;
+  }, /src="([^"]+)"/.exec(odooCl.html)[1]);
+  check(odooWidth <= 480, `Bilder der Checkliste sind klein (${odooWidth} px)`);
+  const odooNo = await helper.evaluate((g) => Exporter.odooChecklist(g, { marker: true, crop: false, images: false }), cl.rec.guideId);
+  check(!odooNo.html.includes('<img'), 'Checkliste ohne Bilder möglich');
+  fs.writeFileSync(path.join(OUT, 'checkliste-odoo.html'), odooCl.html);
+  const mdCl = await helper.evaluate(async (g) => {
+    const z = await Exporter.markdownChecklist(g, { marker: true, crop: false, images: true });
+    const e = await Zip.read(z);
+    return { names: Array.from(e.keys()), md: new TextDecoder().decode(await e.get('checkliste.md').read()) };
+  }, cl.rec.guideId);
+  check(mdCl.md.includes('- [ ] **1. Klicke auf „Bestätigen“**') && mdCl.names.length === 4, 'Markdown-Checkliste mit Kästchen und Bildern');
+  // Export-Dialog bietet nur Odoo und Markdown
+  await ce.click('#ed-export');
+  await ce.waitForTimeout(500);
+  const fmts = await ce.locator('#ex-formats .fmt .l').allTextContents();
+  check(JSON.stringify(fmts) === JSON.stringify(['Odoo Wissen', 'Markdown']) && !(await ce.locator('#ex-shots').isHidden()), 'Export-Dialog der Checkliste: Odoo und Markdown, kleine Screenshots wählbar');
+  await ce.screenshot({ path: path.join(OUT, 'export-checkliste.png') });
+  await ce.close();
+
+  // Sicherung und Import behalten die Checkliste
+  const rt = await helper.evaluate(async (g) => {
+    const blob = await Exporter.backup(g);
+    const id = await Exporter.importProject(new File([blob], 'x.zip'));
+    const gd = await DB.getGuide(id);
+    const st = await DB.getSteps(id);
+    return { kind: gd.kind, pre: gd.test && gd.test.pre, exp: st.map((s) => s.expected), kinds: st.map((s) => s.kind) };
+  }, cl.rec.guideId);
+  check(rt.kind === 'checklist' && rt.pre === 'Benutzer mit Verkaufsrechten' && rt.exp[0].startsWith('Status') && rt.kinds[2] === 'check', 'Sicherung und Import behalten Checkliste ' + JSON.stringify(rt));
+
+  // Klickweg als Checkliste kopieren
+  const cv = await ctx.newPage();
+  await cv.setViewportSize({ width: 1440, height: 980 });
+  await cv.goto(ext(`src/editor/editor.html?guide=${guideId}`));
+  await cv.waitForTimeout(800);
+  const srcSteps = await helper.evaluate((g) => DB.getSteps(g).then((x) => x.filter((s) => s.suggest).map((s) => s.suggest)), guideId);
+  await cv.click('#ed-to-check');
+  await cv.waitForTimeout(300);
+  check(!(await cv.locator('#cv-changes').isDisabled()), `Klickweg hat Schritte mit Vorschlag (${JSON.stringify(srcSteps)})`);
+  await cv.screenshot({ path: path.join(OUT, 'als-checkliste.png') });
+  await cv.check('#cv-changes');
+  await cv.click('#cv-go');
+  await cv.waitForURL(/guide=\d+/);
+  await cv.waitForTimeout(800);
+  const newId = Number(new URL(cv.url()).searchParams.get('guide'));
+  const conv = await helper.evaluate((g) => Promise.all([DB.getGuide(g), DB.getSteps(g)]).then(([gd, st]) => ({ kind: gd.kind, title: gd.title, exp: st.filter((s) => s.type !== 'section').map((s) => s.expected), imgs: st.filter((s) => s.image).length })), newId);
+  check(newId !== guideId && conv.kind === 'checklist' && conv.title.startsWith('Test: ') && conv.exp.length === srcSteps.length &&
+    conv.exp.every((e) => e) && conv.imgs === srcSteps.length, 'Klickweg als Checkliste kopiert ' + JSON.stringify(conv));
+  const srcAfter = await helper.evaluate((g) => DB.getGuide(g).then((x) => x.kind || 'guide'), guideId);
+  check(srcAfter === 'guide', 'Klickweg bleibt unverändert');
+  await cv.close();
+  await helper.evaluate(() => Settings.set({ mode: 'guide' }));
+
   check(errors.length === 0, 'keine Fehler in Erweiterungsseiten ' + JSON.stringify(errors));
   await ctx.close();
   server.close();

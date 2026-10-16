@@ -56,3 +56,37 @@ test('zu viele Schritte', () => {
   const p = ok(); p.steps = new Array(2001).fill({ type: 'section' });
   assert.throws(() => Project.validate(p), /Zu viele/);
 });
+
+test('Testcheckliste: Art, Testinfo, erwartetes Ergebnis und Prüfpunkt bleiben erhalten', () => {
+  const p = ok();
+  p.guide.kind = 'checklist';
+  p.guide.test = { pre: 'Benutzer mit Verkaufsrechten', data: 'Testkunde', evil: 1 };
+  p.steps[0].expected = 'Status wechselt auf „Verkaufsauftrag“';
+  p.steps[0].kind = 'check';
+  const r = Project.validate(p);
+  assert.strictEqual(r.guide.kind, 'checklist');
+  assert.deepStrictEqual(r.guide.test, { pre: 'Benutzer mit Verkaufsrechten', data: 'Testkunde' });
+  assert.strictEqual(r.steps[0].expected, 'Status wechselt auf „Verkaufsauftrag“');
+  assert.strictEqual(r.steps[0].kind, 'check');
+});
+
+test('Testcheckliste: unbekannte Art und zu lange Texte', () => {
+  const p = ok();
+  p.guide.kind = 'evil';
+  p.steps[0].kind = 'script';
+  p.steps[0].expected = 'x'.repeat(5000);
+  const r = Project.validate(p);
+  assert.ok(!('kind' in r.guide) && !('test' in r.guide));
+  assert.strictEqual(r.steps[0].kind, 'click');
+  assert.strictEqual(r.steps[0].expected.length, Project.MAX_EXPECTED);
+});
+
+test('Sicherung einer Checkliste lässt sich wieder einlesen', () => {
+  const guide = { title: 'Test', intro: 'Ziel', kind: 'checklist', test: { pre: 'a', data: 'b' } };
+  const steps = [{ type: 'step', kind: 'check', text: 'Prüfpunkt', expected: 'Rechnung im Entwurf', x: 1, y: 1, vw: 10, vh: 10, imgW: 20, imgH: 20 }];
+  const r = Project.validate(JSON.parse(JSON.stringify(Project.manifest(guide, steps))));
+  assert.strictEqual(r.guide.kind, 'checklist');
+  assert.strictEqual(r.guide.test.data, 'b');
+  assert.strictEqual(r.steps[0].expected, 'Rechnung im Entwurf');
+  assert.strictEqual(r.steps[0].kind, 'check');
+});

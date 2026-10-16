@@ -17,6 +17,7 @@ var Settings = (() => {
     keySteps: false,
     redactHeader: true,
     openSidebar: true,
+    mode: 'guide', // Art neuer Aufnahmen: 'guide' (Klickweg) oder 'checklist' (Testcheckliste)
     fields: DEFAULT_FIELDS,
     footer: ''
   });
@@ -42,6 +43,7 @@ var Settings = (() => {
       keySteps: typeof s.keySteps === 'boolean' ? s.keySteps : DEFAULTS.keySteps,
       openSidebar: typeof s.openSidebar === 'boolean' ? s.openSidebar : DEFAULTS.openSidebar,
       redactHeader: typeof s.redactHeader === 'boolean' ? s.redactHeader : DEFAULTS.redactHeader,
+      mode: s.mode === 'checklist' ? 'checklist' : 'guide',
       fields: s.fields === undefined ? DEFAULT_FIELDS.slice() : sanitizeFields(s.fields),
       footer: typeof s.footer === 'string' ? s.footer.slice(0, 200) : ''
     };

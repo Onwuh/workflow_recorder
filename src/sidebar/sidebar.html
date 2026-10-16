@@ -31,6 +31,19 @@
       <span id="sb-pending-text"></span>
       <button id="sb-pending-clear" class="btn-link inline" type="button">Aufheben</button>
     </div>
+    <div id="sb-mode" class="sb-mode" role="radiogroup" aria-label="Art der Aufnahme">
+      <button class="sb-mode-btn" type="button" role="radio" aria-checked="true" data-mode="guide">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"></path></svg>
+        <span class="l">Klickweg</span>
+        <span class="h">Anleitung mit Screenshots</span>
+      </button>
+      <button class="sb-mode-btn" type="button" role="radio" aria-checked="false" data-mode="checklist">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="6" height="6" rx="1"></rect><path d="M4.5 7l1.2 1.2L8 6M12 7h9M12 17h9"></path><rect x="3" y="14" width="6" height="6" rx="1"></rect></svg>
+        <span class="l">Testcheckliste</span>
+        <span class="h">Aktion und erwartetes Ergebnis</span>
+      </button>
+    </div>
+    <p id="sb-mode-hint" class="sb-mode-hint"></p>
     <button id="sb-start" class="btn-rec" type="button"><span class="dot" aria-hidden="true"></span><span id="sb-start-label">Aufnahme starten</span></button>
     <div id="sb-perm" class="warn" hidden>
       <span>Die Erweiterung braucht Zugriff auf Webseiten. <button id="sb-perm-btn" class="btn-link inline" type="button">Zugriff erlauben</button></span>
@@ -54,6 +67,10 @@
     <span id="sb-count" class="big">0</span>
     <span id="sb-count-label">Schritte erfasst</span>
   </div>
+  <button id="sb-check" class="sb-check" type="button" hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4 10-10"></path></svg>
+    Prüfpunkt ohne Klick setzen <span id="sb-check-key" class="mono sb-check-key">Alt ⇧ P</span>
+  </button>
   <div class="rec-actions">
     <button id="sb-pause" class="btn-ghost" type="button"><span id="sb-pause-label">Pause</span></button>
     <button id="sb-stop" class="btn-light" type="button">Fertig</button>

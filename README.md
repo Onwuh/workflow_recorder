@@ -4,13 +4,26 @@ Browser-Erweiterung für Chrome und Firefox, die Klick-Abläufe aufzeichnet und 
 
 ## Aufnahme
 
-- Start und Stopp über das Popup oder den Kurzbefehl ⌥⇧R.
+- Start und Stopp über Seitenleiste, Popup oder den Kurzbefehl ⌥⇧R.
+- Vor dem Start wählbar: Klickweg (Anleitung) oder Testcheckliste (siehe unten).
 - Pro Klick ein Schritt: Screenshot des sichtbaren Tabs, Klickposition, Schritttext.
 - Schritttexte werden regelbasiert aus dem angeklickten Element erzeugt, z. B. „Klicke auf *Bestätigen*“ oder „Gib bei *Menge* einen Wert ein“.
 - Eingabewerte erscheinen nie im Schritttext.
 - Tastatureingaben als eigener Schritt sind optional.
 - Während der Aufnahme lässt sich der letzte Schritt verwerfen.
 - Schritte nachträglich einfügen: In der Seitenleiste „Ab hier Schritte aufnehmen“ an einem Schritt, oder im Editor „Schritte danach aufnehmen“: Der Editor springt zurück in den Tab, aus dem aufgenommen wurde, und startet dort sofort (ist der Tab zu, ein offener Tab mit derselben Adresse; sonst wird die Stelle für den nächsten Start vorgemerkt). Neue Schritte landen direkt hinter dem gewählten Schritt. Der Editor zeigt neue Schritte live und wählt nach dem Stopp den ersten eingefügten aus.
+
+## Testcheckliste
+
+Neben dem Klickweg lässt sich eine Testcheckliste aufnehmen, die der Kunde selbst abarbeitet. Die Art wählt man vor dem Start in der Seitenleiste (oder im Popup): „Klickweg“ oder „Testcheckliste“. Beide landen nie in derselben Datei.
+
+- Jeder Klick wird ein Prüfpunkt mit Aktion (wie der Schritttext) und Feld „Erwartet“.
+- „Prüfpunkt ohne Klick setzen“ (Seitenleiste oder ⌥⇧P) hält den aktuellen Zustand als Beleg fest, ohne Klickmarker.
+- Vorschläge für das erwartete Ergebnis entstehen aus der Seite: ein Statuswechsel in der Odoo-Statusleiste („Status wechselt auf *Verkaufsauftrag*“) oder ein neu geöffneter Dialog („Dialog *Rechnung erstellen* öffnet sich“). Nur Beschriftungen, nie Datensatznamen. Übernehmen per Klick.
+- Im Editor: Ziel des Tests, Vorbedingungen, Testdaten; Testfälle als Abschnitte. Prüfpunkte ohne erwartetes Ergebnis sind markiert.
+- Aus einem Klickweg macht „Als Checkliste kopieren“ eine neue Checkliste (alle Schritte oder nur die mit Statuswechsel oder Dialog, Vorschläge wahlweise übernommen). Der Klickweg bleibt unverändert.
+- Export nach Odoo Wissen als echte Odoo-Checkliste (`ul.o_checklist`), die der Kunde im Artikel abhakt: Kopf mit „Getestet von“ und „Datum“, pro Prüfpunkt Aktion, „Erwartet“, wahlweise kleiner Screenshot (max. 480 px), „Bemerkung“, am Ende eine Abnahme. Alternativ Markdown mit `- [ ]`. Kein HTML- oder PDF-Export für Checklisten.
+- Testseite für das Einfügen in Odoo: `docs/tests/odoo-checklist-test.html`.
 
 ## Schwärzung
 

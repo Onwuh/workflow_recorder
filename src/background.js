@@ -10,6 +10,7 @@ const api = globalThis.browser ?? globalThis.chrome;
 const CAPTURE_GAP_MS = 550;      // captureVisibleTab: max. 2 Aufrufe pro Sekunde in Chrome
 const MAX_PENDING_CAPTURES = 3;  // Schutz gegen Klickfluten
 const MAX_TEXT = 60;
+const SUGGEST_DELAY_MS = 1500;   // so lange nach dem Klick, bis Dialog oder Status sichtbar sind
 
 // ---------- Aufnahmezustand (chrome.storage.session, überlebt Neustarts des Service Workers) ----------
 
@@ -53,11 +54,12 @@ async function contentState(rec) {
   };
 }
 
-function guideTitle() {
+function guideTitle(kind) {
   // Bewusst nicht der Seitentitel: der enthält oft Datensatznamen.
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  return `Neue Anleitung · ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const name = kind === 'checklist' ? 'Neue Checkliste' : 'Neue Anleitung';
+  return `${name} · ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function isRecordableUrl(url) {
@@ -139,7 +141,14 @@ async function start(tabId, target) {
     return { ok: false, error: 'Auf dieser Seite lässt der Browser keine Erweiterungen zu.' };
   }
 
-  const guideId = insert ? target.guideId : (await DB.addGuide({ title: guideTitle() })).id;
+  let guideId = insert ? target.guideId : 0;
+  if (!guideId) {
+    // Art der neuen Aufnahme aus den Einstellungen (Seitenleiste, Popup).
+    const { mode } = await Settings.get();
+    const data = { title: guideTitle(mode) };
+    if (mode === 'checklist') Object.assign(data, { kind: 'checklist', test: { pre: '', data: '' } });
+    guideId = (await DB.addGuide(data)).id;
+  }
   // Herkunft merken (nur lokal, nicht in Exporten), damit der Editor später dorthin zurückspringen kann.
   await DB.updateGuide(guideId, { sourceTabId: tab.id, sourceOrigin: safeOrigin(tab.url) }).catch(() => {});
   await api.storage.session.remove('pendingInsert');
@@ -368,9 +377,57 @@ function sanitizeStepInfo(s) {
 async function onStep(msg, sender) {
   const rec = await getState();
   if (!rec || rec.paused || sender.tab.id !== rec.tabId) return { ok: false, reason: 'not-recording' };
-  if (pendingCaptures >= MAX_PENDING_CAPTURES) return { ok: false, reason: 'busy' };
+  const seq = Number.isSafeInteger(msg.seq) && msg.seq > 0 ? msg.seq : 0;
+  const r = await captureStep(rec, sanitizeStepInfo(msg.step));
+  if (r.ok && seq) suggestLater(rec.tabId, seq, r.stepId);
+  return r;
+}
 
-  const info = sanitizeStepInfo(msg.step);
+/** Prüfpunkt ohne Klick: Screenshot des aktuellen Zustands, ohne Klickmarker. */
+async function checkpoint() {
+  const rec = await getState();
+  if (!rec || rec.paused) return { ok: false, reason: 'not-recording' };
+  const m = await measureTab(rec.tabId);
+  if (!m) return { ok: false, error: 'Die Seite antwortet nicht. Bitte kurz warten und erneut versuchen.' };
+  const vw = num(m.vw, 1, 100000, 1);
+  const vh = num(m.vh, 1, 100000, 1);
+  return captureStep(rec, {
+    kind: 'check', text: 'Prüfpunkt', x: vw / 2, y: vh / 2, vw, vh,
+    dpr: num(m.dpr, 0.25, 10, 1), showMarker: false
+  });
+}
+
+/** Vorschlag für das erwartete Ergebnis: Was hat sich kurz nach dem Klick geändert? */
+function suggestText(o) {
+  if (!o || typeof o !== 'object' || !o.before || !o.after) return '';
+  const b = { status: cleanText(o.before.status), dialog: cleanText(o.before.dialog) };
+  const a = { status: cleanText(o.after.status), dialog: cleanText(o.after.dialog) };
+  const fit = (tpl, t) => cleanText(tpl.replace('%s', t));
+  if (a.dialog && a.dialog !== b.dialog) return fit('Dialog „%s“ öffnet sich', a.dialog);
+  if (a.status && b.status && a.status !== b.status) return fit('Status wechselt auf „%s“', a.status);
+  if (b.dialog && !a.dialog) return 'Der Dialog schließt sich';
+  return '';
+}
+
+function suggestLater(tabId, seq, stepId) {
+  setTimeout(async () => {
+    try {
+      const o = await Promise.race([
+        api.tabs.sendMessage(tabId, { type: 'observe', seq }, { frameId: 0 }),
+        sleep(400).then(() => null)
+      ]);
+      const text = suggestText(o);
+      if (!text) return;
+      const step = await DB.getStep(stepId);
+      if (!step) return;
+      step.suggest = text;
+      await DB.putStep(step);
+    } catch (_) { /* Seite gewechselt oder geschlossen: kein Vorschlag */ }
+  }, SUGGEST_DELAY_MS);
+}
+
+async function captureStep(rec, info) {
+  if (pendingCaptures >= MAX_PENDING_CAPTURES) return { ok: false, reason: 'busy' };
   pendingCaptures++;
   try {
     const tab = await api.tabs.get(rec.tabId);
@@ -426,7 +483,7 @@ async function onStep(msg, sender) {
     if (now.insert) now.insert.after = saved.order;
     now.count = now.added.length;
     await setState(now);
-    return { ok: true, count: now.count };
+    return { ok: true, count: now.count, stepId: saved.id };
   } catch (e) {
     return { ok: false, reason: 'capture-failed', error: String(e && e.message || e) };
   } finally {
@@ -492,6 +549,7 @@ async function handle(msg, sender) {
         await api.storage.session.remove('pendingInsert');
         return { ok: true };
       case 'stop': return stop({ openEditor: msg.openEditor !== false });
+      case 'checkpoint': return checkpoint();
       case 'recount': return recount();
       case 'pause': return setPaused(true);
       case 'resume': return setPaused(false);
@@ -558,6 +616,10 @@ if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => applyActionBe
 applyActionBehavior();
 
 api.commands.onCommand.addListener(async (command, tab) => {
+  if (command === 'add-checkpoint') {
+    await checkpoint();
+    return;
+  }
   if (command !== 'toggle-recording') return;
   // Vor jedem await: sonst gilt die Nutzeraktion als verbraucht.
   if (openSidebarSetting) openSidebarNow(tab && tab.windowId);

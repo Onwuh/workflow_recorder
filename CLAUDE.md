@@ -46,7 +46,7 @@ scripts/build.js    Pakete für Chrome und Firefox (dist/)
 tests/              Unit-Tests (node --test) und e2e/ (Playwright, Chromium)
 ```
 
-Schritte haben `type: 'step' | 'section'`. Schwärzungen (`redactions`), Klickmarker, Pfeile und Texte (`annotations`, Typ `arrow`, `text`, `rect`, `ellipse`, Farbe nur aus `Render.COLORS`) sind Vektordaten in Bildpixeln und werden erst beim Export eingezeichnet. Nur Zuschneiden ersetzt das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
+Anleitungen haben optional `kind: 'checklist'` (Testcheckliste, sonst Klickweg) mit `test: { pre, data }`; das Ziel steht in `intro`. Schritte haben `type: 'step' | 'section'`, `kind: 'click' | 'input' | 'check'` (`check` = Prüfpunkt ohne Klick), bei Checklisten `expected` und aus der Aufnahme `suggest` (Vorschlag aus Statusleiste/Dialogtitel; das Content-Script friert den Zustand nach einem Klick beim nächsten Klick ein). Schwärzungen (`redactions`), Klickmarker, Pfeile und Texte (`annotations`, Typ `arrow`, `text`, `rect`, `ellipse`, Farbe nur aus `Render.COLORS`) sind Vektordaten in Bildpixeln und werden erst beim Export eingezeichnet. Nur Zuschneiden ersetzt das gespeicherte Bild. `unredacted`/`navigated`/`reviewed` steuern die Prüfwarnung.
 
 ## Umsetzungshinweise
 
@@ -97,7 +97,7 @@ Aus einem ersten, nicht übernommenen Entwurf. Sie beschreiben Fallstricke, die 
 
 ## Stand
 
-Umgesetzt: Aufnahme mit Auto-Schwärzung, Popup, Seitenleiste, Editor mit entfernbaren Schwärzungen, Zuschneiden, Klickpunkt, Pfeilen, Abschnitte, Export (HTML, PDF-Datei, Odoo-Zwischenablage, Markdown-ZIP), Projektsicherung und Import, Einstellungen.
+Umgesetzt: Testcheckliste (Modus in Seitenleiste/Popup, Prüfpunkt ohne Klick ⌥⇧P, Vorschläge, Klickweg als Checkliste kopieren, Export als Odoo-Checkliste `ul.o_checklist` und Markdown), Aufnahme mit Auto-Schwärzung, Popup, Seitenleiste, Editor mit entfernbaren Schwärzungen, Zuschneiden, Klickpunkt, Pfeilen, Abschnitte, Export (HTML, PDF-Datei, Odoo-Zwischenablage, Markdown-ZIP), Projektsicherung und Import, Einstellungen.
 
 Prüfen vor jedem Commit: `npm test`, `npm run lint`, `npm run e2e`. Bei Änderungen an Screenshot, Schwärzung oder Klickpunkt zusätzlich `npm run e2e:align`: Der Headless-E2E emuliert den Viewport, dort passt der Screenshot nicht zum DOM; nur im echten Fenster lässt sich die Ausrichtung prüfen.
 
@@ -105,3 +105,4 @@ Offen:
 1. Test in echtem Firefox (bisher nur `web-ext lint`, E2E läuft in Chromium).
 2. Test an einer echten Odoo-Instanz (Selektoren für Breadcrumb, Many2one, Listen in Odoo 17/18).
 3. Schwärzung in iframes.
+4. Odoo-Checkliste in echter Odoo-Instanz prüfen (`docs/tests/odoo-checklist-test.html`): bleibt `o_checklist` beim Einfügen erhalten, ein Haken pro Prüfpunkt, Bildgröße.

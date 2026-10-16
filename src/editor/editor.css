@@ -152,6 +152,28 @@ body { background: var(--bg); min-height: 100vh; }
 .ex-actions { padding: 16px 24px 22px; display: flex; justify-content: flex-end; gap: 10px; }
 .ex-actions .btn { height: 44px; border-radius: 9px; }
 
+/* ---- Testcheckliste ---- */
+.kind-badge {
+  display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 5px; font-size: 11px; font-weight: 600;
+  background: #E8F3EC; color: var(--ok);
+}
+.test-info { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.exp-wrap { display: flex; flex-direction: column; gap: 8px; }
+.exp-wrap[hidden] { display: none; }
+#ed-expected { font-size: 14px; color: var(--fg); }
+#ed-expected:placeholder-shown { border-style: dashed; border-color: #D9A44A; background: var(--warn-bg); }
+.suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.suggest[hidden] { display: none; }
+.chip {
+  min-height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid var(--line); background: var(--bg);
+  font-size: 13px; color: var(--fg);
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.step-btn .flag.open { color: var(--muted); background: var(--line-soft); }
+.convert .ex-form { min-height: 0; }
+.cv-group { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cv-group legend { font-size: 12px; color: var(--muted); padding: 0; margin-bottom: 4px; }
+
 @media (max-width: 720px) {
   .topbar { padding: 12px 16px; }
   .ed-body { padding: 16px; }
