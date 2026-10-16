@@ -190,6 +190,97 @@ var Exporter = (() => {
     return { html: h, text: t.trim() + '\n', bytes };
   }
 
+  // ---------- Testcheckliste ----------
+
+  // Kleine Bilder: in der Checkliste nur zur Orientierung. Ohne feste Breite eingefügt (siehe oben),
+  // die natürliche Breite bleibt so unter der Artikelspalte.
+  const CHECK_IMG = { maxWidth: 480, type: 'image/webp', quality: 0.85 };
+  const HOWTO = 'Führe die Punkte der Reihe nach aus. Stimmt das Ergebnis, setze den Haken. ' +
+    'Stimmt es nicht, lass den Haken weg und beschreibe unter „Bemerkung“, was passiert ist.';
+  const SIGN_OFF = 'Alle Punkte erfüllt, der Ablauf ist freigegeben.';
+
+  /** Zeilen des Kopfs: leere Angaben bleiben weg, Namensfelder zum Ausfüllen immer. */
+  function checkHead(guide) {
+    const t = guide.test || {};
+    return [
+      ['Getestet von', ''],
+      ['Datum', ''],
+      ['Ziel', guide.intro || ''],
+      ['Vorbedingungen', t.pre || ''],
+      ['Testdaten', t.data || '']
+    ].filter(([k, v], i) => i < 2 || v.trim());
+  }
+
+  const escLines = (v) => esc(v).replace(/\r?\n/g, '<br>');
+
+  /** Odoo Wissen: Odoo-Checklisten (ul.o_checklist), die der Kunde im Artikel abhakt. */
+  async function odooChecklist(guideId, opts, onProgress) {
+    const { guide, steps } = await load(guideId);
+    const imgs = opts.images === false
+      ? new Map()
+      : await renderImages(steps, { ...CHECK_IMG, crop: opts.crop, marker: opts.marker }, 'dataurl', onProgress);
+    let h = `<h2>${esc(guide.title)}</h2><p><strong>So testest du:</strong> ${esc(HOWTO)}</p>`;
+    let t = `${guide.title}\n\n${HOWTO}\n\n`;
+    // Leere Zellen brauchen einen Absatz, sonst lässt Odoo nicht hineinschreiben.
+    h += '<table class="table table-bordered"><tbody>' + checkHead(guide).map(([k, v]) =>
+      `<tr><td><strong>${esc(k)}</strong></td><td>${v ? `<p>${escLines(v)}</p>` : '<p><br></p>'}</td></tr>`).join('') + '</tbody></table>';
+    t += checkHead(guide).map(([k, v]) => `${k}: ${v.replace(/\s*\n\s*/g, ', ') || '________'}`).join('\n') + '\n';
+
+    let open = false;
+    const close = () => { if (open) { h += '</ul>'; open = false; } };
+    for (const s of number(steps)) {
+      if (s.type === 'section') {
+        close();
+        h += `<h3>${esc(s.text)}</h3>${s.note ? `<p>${escLines(s.note)}</p>` : ''}`;
+        t += `\n${s.text}\n${s.note ? s.note + '\n' : ''}`;
+        continue;
+      }
+      if (!open) { h += '<ul class="o_checklist">'; open = true; }
+      const img = imgs.get(s.id);
+      // Inhalt bewusst als Zeilen in einem Listenpunkt: Odoo behält so einen Haken pro Prüfpunkt.
+      h += `<li><strong>${s.n}. ${esc(s.text)}</strong>`;
+      if (s.expected) h += `<br>Erwartet: ${escLines(s.expected)}`;
+      if (s.note) h += `<br><em>Hinweis: ${escLines(s.note)}</em>`;
+      if (img) h += `<br><img class="img-fluid" src="${esc(img.src)}" alt="Prüfpunkt ${s.n}">`;
+      h += '<br>Bemerkung: </li>';
+      t += `[ ] ${s.n}. ${s.text}\n${s.expected ? `    Erwartet: ${s.expected}\n` : ''}${s.note ? `    Hinweis: ${s.note}\n` : ''}    Bemerkung:\n`;
+    }
+    close();
+    h += `<h3>Abnahme</h3><ul class="o_checklist"><li>${esc(SIGN_OFF)}</li></ul><p>Name, Datum: </p>`;
+    t += `\nAbnahme\n[ ] ${SIGN_OFF}\nName, Datum:\n`;
+    const bytes = new TextEncoder().encode(h).length;
+    return { html: h, text: t, bytes };
+  }
+
+  async function markdownChecklist(guideId, opts, onProgress) {
+    const { guide, steps } = await load(guideId);
+    const imgs = opts.images === false
+      ? new Map()
+      : await renderImages(steps, { maxWidth: 800, crop: opts.crop, marker: opts.marker, type: 'image/png' }, 'blob', onProgress);
+    const files = [];
+    let md = `# ${mdEscape(guide.title)}\n\n${mdEscape(HOWTO)}\n\n`;
+    md += checkHead(guide).map(([k, v]) => `**${mdEscape(k)}:** ${v ? mdBlock(v) : '________'}`).join('  \n') + '\n\n';
+    for (const s of number(steps)) {
+      if (s.type === 'section') {
+        md += `## ${mdEscape(s.text)}\n\n${s.note ? mdBlock(s.note) + '\n\n' : ''}`;
+        continue;
+      }
+      md += `- [ ] **${s.n}. ${mdEscape(s.text)}**  \n`;
+      if (s.expected) md += `  Erwartet: ${mdBlock(s.expected).split('\n').join('\n  ')}  \n`;
+      if (s.note) md += `  *Hinweis: ${mdBlock(s.note).split('\n').join('\n  ')}*  \n`;
+      const img = imgs.get(s.id);
+      if (img) {
+        const name = `bilder/pruefpunkt-${String(s.n).padStart(2, '0')}.png`;
+        files.push({ name, data: img.blob });
+        md += `  ![Prüfpunkt ${s.n}](${name})  \n`;
+      }
+      md += '  Bemerkung:\n\n';
+    }
+    md += `## Abnahme\n\n- [ ] ${mdEscape(SIGN_OFF)}\n\nName, Datum: ________\n`;
+    files.unshift({ name: 'checkliste.md', data: md, compress: true });
+    return Zip.create(files);
+  }
+
   /** Kopiert HTML + Text. Fallback: Inhalt markieren und execCommand('copy'). */
   async function copyToClipboard(htmlStr, text) {
     try {
@@ -324,7 +415,10 @@ var Exporter = (() => {
       } catch (_) { logo = null; }
     }
 
-    const guide = await DB.addGuide({ title: g.title, intro: g.intro, logo });
+    const guide = await DB.addGuide({
+      title: g.title, intro: g.intro, logo,
+      ...(g.kind === 'checklist' ? { kind: 'checklist', test: g.test } : {})
+    });
     try {
       let order = 0;
       for (const s of prepared) {
@@ -337,5 +431,8 @@ var Exporter = (() => {
     return guide.id;
   }
 
-  return { load, number, stepCount, minutes, renderImages, guideBody, html, pdf, odoo, copyToClipboard, markdown, backup, importProject, mdEscape };
+  return {
+    load, number, stepCount, minutes, renderImages, guideBody, html, pdf, odoo, copyToClipboard, markdown, backup, importProject, mdEscape,
+    odooChecklist, markdownChecklist
+  };
 })();

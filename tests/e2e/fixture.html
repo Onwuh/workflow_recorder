@@ -24,6 +24,10 @@ td, th { border: 1px solid #ccc; padding: 6px 10px; }
   <button class="btn btn-primary" id="confirm" type="button">Bestätigen</button>
   <button class="btn" id="iconbtn" type="button" aria-label="Aktion"><span>⚙</span></button>
   <div class="nav nav-tabs"><a href="#" role="tab" id="tab">Auftragszeilen</a></div>
+  <div class="o_statusbar_status" style="margin-left:auto;display:flex;gap:4px">
+    <button type="button" class="o_arrow_button o_arrow_button_current" aria-checked="true" id="st-quote">Angebot</button>
+    <button type="button" class="o_arrow_button" aria-checked="false" id="st-order">Verkaufsauftrag</button>
+  </div>
 </div>
 <div class="o_form_sheet">
   <div class="o_cell"><label class="o_form_label" for="partner_id_0">Kunde<sup>?</sup></label></div>
@@ -43,13 +47,21 @@ td, th { border: 1px solid #ccc; padding: 6px 10px; }
 <div class="modal-backdrop" id="wiz-bg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.35)"></div>
 <div class="o_dialog" id="wizard" hidden>
   <div class="modal-content" role="dialog" style="position:fixed;left:300px;top:110px;width:520px;height:280px;background:#fff;border:1px solid #999;padding:16px;box-sizing:border-box">
-    <h4 style="margin:0 0 16px">Assistent</h4>
+    <h4 class="modal-title" style="margin:0 0 16px">Assistent</h4>
     <label class="o_form_label" for="wiz_partner_0">Rechnungsadresse</label>
     <div name="partner_invoice_id" class="o_field_widget" style="margin-top:110px"><input id="wiz_partner_0" value="Beispielkunde GmbH"></div>
     <button type="button" id="wiz_confirm" style="margin-top:12px">Übernehmen</button>
   </div>
 </div>
 <script>
+// „Bestätigen“ setzt den Status weiter, wie in Odoo (mit kurzer Verzögerung wie nach einem Serveraufruf).
+document.getElementById('confirm').addEventListener('click', () => setTimeout(() => {
+  for (const b of document.querySelectorAll('.o_statusbar_status button')) {
+    const cur = b.id === 'st-order';
+    b.classList.toggle('o_arrow_button_current', cur);
+    b.setAttribute('aria-checked', cur ? 'true' : 'false');
+  }
+}, 200));
 document.getElementById('open-wizard').addEventListener('click', () => {
   document.getElementById('wizard').hidden = false;
   document.getElementById('wiz-bg').hidden = false;

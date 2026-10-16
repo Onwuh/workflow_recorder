@@ -9,6 +9,8 @@
   let rec = null;
   let pending = null;
   let guideId = null;
+  let guideKind = 'guide'; // Art der angezeigten Anleitung
+  let mode = 'guide';      // Art neuer Aufnahmen (Einstellung)
   let renderedKey = '';
   let urls = [];
   const saveTimers = new Map();
@@ -33,7 +35,14 @@
     $('sb-rec').hidden = !rec;
     $('sb-discard').hidden = !rec || !rec.count;
     $('sb-pending').hidden = !pending;
-    $('sb-start-label').textContent = pending ? 'Schritte einfügen' : 'Aufnahme starten';
+    // Beim Einfügen bestimmt die Anleitung die Art, nicht die Auswahl.
+    $('sb-mode').hidden = !!pending;
+    $('sb-mode-hint').hidden = !!pending;
+    for (const b of $('sb-mode').querySelectorAll('[data-mode]')) b.setAttribute('aria-checked', b.dataset.mode === mode ? 'true' : 'false');
+    $('sb-mode-hint').textContent = mode === 'checklist'
+      ? 'Jeder Klick wird ein Prüfpunkt. Das erwartete Ergebnis trägst du während oder nach der Aufnahme ein.'
+      : 'Jeder Klick wird ein Schritt mit Screenshot. Später kannst du daraus eine Checkliste machen.';
+    $('sb-start-label').textContent = pending ? 'Schritte einfügen' : mode === 'checklist' ? 'Checkliste aufnehmen' : 'Klickweg aufnehmen';
     if (pending) {
       $('sb-pending-text').textContent = pending.number
         ? `Neue Schritte werden in „${pending.title}“ nach Schritt ${pending.number} eingefügt.`
@@ -47,11 +56,20 @@
         : `Einfügen in „${rec.insert.title}“ am Anfang`;
     }
     $('sb-time').textContent = elapsed(rec);
+    const check = recKind() === 'checklist';
     $('sb-count').textContent = String(rec.count);
-    $('sb-count-label').textContent = rec.count === 1 ? 'Schritt erfasst' : 'Schritte erfasst';
+    $('sb-count-label').textContent = check
+      ? (rec.count === 1 ? 'Prüfpunkt erfasst' : 'Prüfpunkte erfasst')
+      : (rec.count === 1 ? 'Schritt erfasst' : 'Schritte erfasst');
+    $('sb-check').hidden = !check || rec.paused;
     $('sb-status').textContent = rec.paused ? 'PAUSIERT' : 'AUFNAHME';
     $('sb-dot').classList.toggle('paused', rec.paused);
     $('sb-pause-label').textContent = rec.paused ? 'Fortsetzen' : 'Pause';
+  }
+
+  /** Art der Anleitung, in die gerade aufgenommen wird. */
+  function recKind() {
+    return rec && rec.guideId === guideId ? guideKind : 'guide';
   }
 
   function openEditor(stepId) {
@@ -67,6 +85,7 @@
       const fresh = await DB.getStep(step.id);
       if (!fresh) return;
       fresh.text = step.text;
+      if (typeof step.expected === 'string') fresh.expected = step.expected;
       await DB.putStep(fresh);
     }, 400));
   }
@@ -82,13 +101,19 @@
       return;
     }
     const steps = await DB.getSteps(guideId);
+    const kindBefore = guideKind;
+    guideKind = guide.kind === 'checklist' ? 'checklist' : 'guide';
+    if (kindBefore !== guideKind) renderHead();
+    const isCheck = guideKind === 'checklist';
     const key = `${guideId}:${guide.updatedAt}:${steps.length}:${rec ? 'r' : '-'}`;
     if (!force && key === renderedKey) return;
     // Nicht neu zeichnen, während jemand gerade einen Text bearbeitet.
-    if (!force && document.activeElement && document.activeElement.classList.contains('sb-text')) return;
+    const ae = document.activeElement;
+    if (!force && ae && (ae.classList.contains('sb-text') || ae.classList.contains('sb-exp'))) return;
     renderedKey = key;
 
-    $('sb-guide-label').textContent = rec && rec.guideId === guideId ? 'Aktuelle Aufnahme' : 'Zuletzt bearbeitet';
+    const what = isCheck ? 'Checkliste' : 'Anleitung';
+    $('sb-guide-label').textContent = rec && rec.guideId === guideId ? `Aktuelle Aufnahme · ${what}` : `Zuletzt bearbeitet · ${what}`;
     $('sb-guide-title').textContent = guide.title || 'Ohne Titel';
     $('sb-open').hidden = false;
     $('sb-empty').hidden = steps.length > 0;
@@ -101,7 +126,7 @@
       if (!isSec) n++;
       const input = el('input', {
         class: 'sb-text', type: 'text', maxlength: '200', value: s.text || '',
-        'aria-label': isSec ? 'Überschrift des Abschnitts' : `Text von Schritt ${n}`
+        'aria-label': isSec ? (isCheck ? 'Name des Testfalls' : 'Überschrift des Abschnitts') : `Text von ${isCheck ? 'Prüfpunkt' : 'Schritt'} ${n}`
       });
       input.addEventListener('input', () => {
         s.text = input.value.slice(0, 200);
@@ -119,8 +144,9 @@
       const addedIds = new Set(rec && rec.guideId === guideId ? (rec.added || []).map((a) => a.id) : []);
       const card = el('li', { class: 'sb-step' + (addedIds.has(s.id) ? ' added' : ''), dataset: { id: String(s.id) } },
         el('div', { class: 'sb-step-head' },
-          el('span', { class: 'sb-num' + (isSec ? ' section' : ''), text: isSec ? '§' : String(n) }),
+          el('span', { class: 'sb-num' + (isSec ? ' section' : s.kind === 'check' ? ' check' : ''), text: isSec ? '§' : String(n) }),
           input, del));
+      if (isCheck && !isSec) card.appendChild(expectedField(s, n));
       if (!isSec && s.image) {
         const th = U.thumb(s, 'sb-thumb-in', urls);
         th.style.width = '100%';
@@ -136,7 +162,7 @@
         card.appendChild(el('button', {
           class: 'sb-insert-here', type: 'button',
           title: 'Neue Schritte direkt nach diesem aufnehmen',
-          text: '+ Ab hier Schritte aufnehmen',
+          text: isCheck ? '+ Ab hier Prüfpunkte aufnehmen' : '+ Ab hier Schritte aufnehmen',
           onclick: () => start({ guideId, afterStepId: s.id })
         }));
       }
@@ -147,6 +173,38 @@
     const lastAdded = rec && rec.guideId === guideId && rec.added && rec.added.length ? rec.added[rec.added.length - 1].id : null;
     const target = lastAdded ? $('sb-steps').querySelector(`[data-id="${lastAdded}"]`) : null;
     if (target) target.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Feld „Erwartet“ mit Vorschlag aus der Aufnahme (Statuswechsel, Dialog). */
+  function expectedField(s, n) {
+    const id = `sb-exp-${s.id}`;
+    const ta = el('textarea', {
+      id, class: 'sb-exp', rows: '1', maxlength: '300', placeholder: 'Was soll der Kunde danach sehen?'
+    });
+    ta.value = s.expected || '';
+    const chip = el('div', { class: 'sb-suggest' });
+    const renderChip = () => {
+      const show = s.suggest && !s.expected;
+      chip.hidden = !show;
+      if (!show) return;
+      chip.replaceChildren(el('span', { text: 'Vorschlag:' }), el('button', {
+        class: 'sb-chip', type: 'button', text: s.suggest, title: 'Als erwartetes Ergebnis übernehmen',
+        onclick: () => {
+          ta.value = s.suggest;
+          s.expected = s.suggest;
+          saveLater(s);
+          renderChip();
+        }
+      }));
+    };
+    ta.addEventListener('input', () => {
+      s.expected = ta.value.slice(0, 300);
+      saveLater(s);
+      renderChip();
+    });
+    renderChip();
+    return el('div', { class: 'sb-exp-wrap' },
+      el('label', { class: 'sb-exp-label', for: id, text: `Erwartet (Prüfpunkt ${n})` }), ta, chip);
   }
 
   async function refresh(force) {
@@ -187,12 +245,35 @@
   }
 
   $('sb-start').addEventListener('click', () => start());
+  for (const b of $('sb-mode').querySelectorAll('[data-mode]')) {
+    b.addEventListener('click', async () => {
+      mode = b.dataset.mode;
+      renderHead();
+      await Settings.set({ mode });
+    });
+  }
+  $('sb-check').addEventListener('click', async () => {
+    $('sb-check').disabled = true;
+    try {
+      const r = await U.send({ type: 'checkpoint' }).catch(() => null);
+      if (!r || !r.ok) {
+        U.toast((r && r.error) || 'Der Prüfpunkt konnte nicht aufgenommen werden. Ist der Tab der Aufnahme sichtbar?', { error: true });
+      }
+    } finally {
+      $('sb-check').disabled = false;
+    }
+  });
+  api.commands.getAll().then((cmds) => {
+    const c = cmds.find((x) => x.name === 'add-checkpoint');
+    $('sb-check-key').textContent = c && c.shortcut ? c.shortcut : '';
+  }, () => {});
 
   // Aufnahme-Optionen (gleiche Einstellungen wie Popup und Einstellungsseite)
   const OPTS = [['sb-opt-redact', 'autoRedact'], ['sb-opt-keys', 'keySteps']];
   async function renderOpts() {
     const st = await Settings.get();
     for (const [id, key] of OPTS) $(id).checked = st[key];
+    if (st.mode !== mode) { mode = st.mode; renderHead(); }
   }
   for (const [id, key] of OPTS) {
     $(id).addEventListener('change', async (e) => {

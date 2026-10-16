@@ -9,6 +9,8 @@ var Project = (() => {
   const MAX_STEPS = 2000;
   const MAX_ANNOTATIONS = 50;
   const IMG_RE = /^bilder\/\d{4}\.png$/;
+  const KINDS = ['click', 'input', 'check']; // check: Prüfpunkt ohne Klick
+  const MAX_EXPECTED = 300;
 
   function str(v, max) {
     if (typeof v !== 'string') return '';
@@ -83,6 +85,11 @@ var Project = (() => {
       createdAt: ts(g.createdAt),
       logo: typeof g.logo === 'string' && g.logo === 'logo.png' ? 'logo.png' : null
     };
+    if (g.kind === 'checklist') {
+      const t = g.test && typeof g.test === 'object' ? g.test : {};
+      guide.kind = 'checklist';
+      guide.test = { pre: str(t.pre, 2000), data: str(t.data, 2000) };
+    }
     if (!Array.isArray(raw.steps)) throw new Error('Schritte fehlen');
     if (raw.steps.length > MAX_STEPS) throw new Error('Zu viele Schritte');
 
@@ -103,9 +110,10 @@ var Project = (() => {
       const anns = Array.isArray(s.annotations) ? s.annotations.slice(0, MAX_ANNOTATIONS) : [];
       return {
         type,
-        kind: s.kind === 'input' ? 'input' : 'click',
+        kind: KINDS.includes(s.kind) ? s.kind : 'click',
         text: line(s.text, 200) || 'Klicke an die markierte Stelle',
         note: str(s.note, 5000),
+        expected: str(s.expected, MAX_EXPECTED),
         x: num(s.x, 0, vw, 0),
         y: num(s.y, 0, vh, 0),
         vw, vh,
@@ -135,7 +143,10 @@ var Project = (() => {
         title: guide.title || '',
         intro: guide.intro || '',
         createdAt: guide.createdAt || Date.now(),
-        logo: guide.logo ? 'logo.png' : null
+        logo: guide.logo ? 'logo.png' : null,
+        ...(guide.kind === 'checklist'
+          ? { kind: 'checklist', test: { pre: (guide.test && guide.test.pre) || '', data: (guide.test && guide.test.data) || '' } }
+          : {})
       },
       steps: steps.map((s) => {
         if (s.type === 'section') return { type: 'section', text: s.text || '', note: s.note || '' };
@@ -145,6 +156,7 @@ var Project = (() => {
           kind: s.kind || 'click',
           text: s.text || '',
           note: s.note || '',
+          expected: s.expected || '',
           x: s.x, y: s.y, vw: s.vw, vh: s.vh, dpr: s.dpr,
           imgW: s.imgW, imgH: s.imgH,
           showMarker: s.showMarker !== false,
@@ -160,7 +172,7 @@ var Project = (() => {
     };
   }
 
-  return { FORMAT, VERSION, MANIFEST, validate, manifest };
+  return { FORMAT, VERSION, MANIFEST, MAX_EXPECTED, validate, manifest };
 })();
 
 if (typeof module !== 'undefined') module.exports = Project;

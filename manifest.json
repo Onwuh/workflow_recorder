@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Workflow Recorder",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Zeichnet Klick-Abläufe auf und exportiert sie als Schritt-für-Schritt-Anleitung. Alles bleibt lokal.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -56,6 +56,12 @@
         "default": "Alt+Shift+R"
       },
       "description": "Aufnahme starten oder beenden"
+    },
+    "add-checkpoint": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Prüfpunkt ohne Klick setzen (während der Aufnahme)"
     }
   },
   "content_security_policy": {

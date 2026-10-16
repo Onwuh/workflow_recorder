@@ -11,6 +11,8 @@
   let lastRendered = -1;
   let thumbUrls = [];
   let windowId = null;
+  let mode = 'guide';
+  let recKind = 'guide';
   api.windows.getCurrent().then((w) => { windowId = w.id; }, () => {});
 
   function show(view) {
@@ -43,7 +45,7 @@
     const st = await U.send({ type: 'status' }).catch(() => null);
     const p = st && st.pendingInsert;
     $('pending').hidden = !p;
-    $('start-label').textContent = p ? 'Schritte einfügen' : 'Aufnahme starten';
+    $('mode').hidden = !!p;
     if (p) {
       $('pending-text').textContent = p.number
         ? `Neue Schritte werden in „${p.title}“ nach Schritt ${p.number} eingefügt.`
@@ -51,11 +53,18 @@
     }
 
     const s = await Settings.get();
+    mode = s.mode;
+    renderMode(!!p);
     $('opt-redact').checked = s.autoRedact;
     $('opt-keys').checked = s.keySteps;
 
     await checkPermission();
     await renderRecent();
+  }
+
+  function renderMode(pendingInsert) {
+    for (const b of $('mode').querySelectorAll('[data-mode]')) b.setAttribute('aria-checked', b.dataset.mode === mode ? 'true' : 'false');
+    $('start-label').textContent = pendingInsert ? 'Schritte einfügen' : mode === 'checklist' ? 'Checkliste aufnehmen' : 'Klickweg aufnehmen';
   }
 
   async function activeTab() {
@@ -148,8 +157,12 @@
 
   function renderRecHead() {
     $('rec-time').textContent = elapsed(rec);
+    const check = recKind === 'checklist';
     $('rec-count').textContent = String(rec.count);
-    $('rec-count-label').textContent = rec.count === 1 ? 'Schritt erfasst' : 'Schritte erfasst';
+    $('rec-count-label').textContent = check
+      ? (rec.count === 1 ? 'Prüfpunkt erfasst' : 'Prüfpunkte erfasst')
+      : (rec.count === 1 ? 'Schritt erfasst' : 'Schritte erfasst');
+    $('btn-check').hidden = !check || rec.paused;
     $('rec-status').textContent = rec.paused ? 'PAUSIERT' : 'AUFNAHME';
     $('rec-dot').classList.toggle('paused', rec.paused);
     $('pause-label').textContent = rec.paused ? 'Fortsetzen' : 'Pause';
@@ -186,6 +199,10 @@
 
   function renderRec() {
     show('rec');
+    DB.getGuide(rec.guideId).then((g) => {
+      recKind = g && g.kind === 'checklist' ? 'checklist' : 'guide';
+      if (rec) renderRecHead();
+    }, () => {});
     renderRecHead();
     renderLast();
     clearInterval(timer);
@@ -243,6 +260,17 @@
   $('btn-sidebar-rec').addEventListener('click', openSidebar);
 
   $('btn-start').addEventListener('click', start);
+  for (const b of $('mode').querySelectorAll('[data-mode]')) {
+    b.addEventListener('click', async () => {
+      mode = b.dataset.mode;
+      renderMode(false);
+      await Settings.set({ mode });
+    });
+  }
+  $('btn-check').addEventListener('click', async () => {
+    const r = await U.send({ type: 'checkpoint' }).catch(() => null);
+    if (!r || !r.ok) U.toast((r && r.error) || 'Der Prüfpunkt konnte nicht aufgenommen werden.', { error: true });
+  });
   $('pending-clear').addEventListener('click', async () => {
     await U.send({ type: 'clear-insert' });
     renderReady();

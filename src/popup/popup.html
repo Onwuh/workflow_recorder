@@ -32,6 +32,16 @@
         <span id="pending-text"></span>
         <button id="pending-clear" class="btn-link inline" type="button">Aufheben</button>
       </div>
+      <div id="mode" class="sb-mode" role="radiogroup" aria-label="Art der Aufnahme">
+        <button class="sb-mode-btn" type="button" role="radio" aria-checked="true" data-mode="guide">
+          <span class="l">Klickweg</span>
+          <span class="h">Anleitung mit Screenshots</span>
+        </button>
+        <button class="sb-mode-btn" type="button" role="radio" aria-checked="false" data-mode="checklist">
+          <span class="l">Testcheckliste</span>
+          <span class="h">Aktion und erwartetes Ergebnis</span>
+        </button>
+      </div>
       <button id="btn-start" class="btn-rec" type="button">
         <span class="dot" aria-hidden="true"></span>
         <span id="start-label">Aufnahme starten</span>
@@ -71,6 +81,7 @@
         <span id="rec-count" class="big">0</span>
         <span id="rec-count-label">Schritte erfasst</span>
       </div>
+      <button id="btn-check" class="sb-check" type="button" hidden>Prüfpunkt ohne Klick setzen</button>
       <div class="rec-actions">
         <button id="btn-pause" class="btn-ghost" type="button">
           <svg id="ico-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>

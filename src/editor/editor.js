@@ -35,7 +35,9 @@ var Editor = (() => {
       items.push(el('div', { class: 'ov-item' },
         thumb,
         el('div', { class: 'ov-text' },
-          el('a', { class: 'ov-title', href, text: g.title || 'Ohne Titel' }),
+          el('a', { class: 'ov-title', href },
+            g.kind === 'checklist' ? el('span', { class: 'kind-badge', text: 'Checkliste' }) : null,
+            g.title || 'Ohne Titel'),
           el('span', { class: 'ov-meta', text: `${U.stepsLabel(g.stepCount)} · geändert ${U.relDay(g.updatedAt)}${g.lastExport ? ` · zuletzt als ${g.lastExport} exportiert` : ' · Entwurf'}` })),
         el('div', { class: 'ov-actions' },
           el('a', { class: 'btn', href, text: 'Öffnen' }),
@@ -84,6 +86,8 @@ var Editor = (() => {
   };
 
   const current = () => S.steps[S.sel] || null;
+  const isCheck = () => !!S.guide && S.guide.kind === 'checklist';
+  const MAX_EXPECTED = Project.MAX_EXPECTED;
 
   function numbering() {
     let n = 0;
@@ -129,6 +133,7 @@ var Editor = (() => {
     if (!g) return;
     g.title = S.guide.title;
     g.intro = S.guide.intro;
+    if (isCheck()) g.test = { pre: S.guide.test.pre, data: S.guide.test.data };
     await DB.putGuide(g);
   }
 
@@ -136,8 +141,31 @@ var Editor = (() => {
     await DB.putStep(step);
   }
 
+  function countLabel(n) {
+    if (!isCheck()) return U.stepsLabel(n);
+    return n === 1 ? '1 Prüfpunkt' : `${n} Prüfpunkte`;
+  }
+
   function renderMeta() {
-    $('ed-meta').textContent = `${U.stepsLabel(stepCount())} · gespeichert ${U.relTime(S.guide.updatedAt)}`;
+    $('ed-meta').textContent = `${countLabel(stepCount())} · gespeichert ${U.relTime(S.guide.updatedAt)}`;
+  }
+
+  /** Beschriftungen und Felder je nach Art (Klickweg oder Testcheckliste). */
+  function applyKind() {
+    const c = isCheck();
+    if (c && (!S.guide.test || typeof S.guide.test !== 'object')) S.guide.test = { pre: '', data: '' };
+    $('ed-kind').hidden = !c;
+    $('ed-to-check').hidden = c;
+    $('ed-preview').hidden = c;
+    $('ed-test').hidden = !c;
+    $('ed-intro-label').textContent = c ? 'Ziel des Tests' : 'Einleitung';
+    $('ed-intro').placeholder = c ? 'Was soll der Kunde mit diesem Test bestätigen?' : 'Worum geht es in dieser Anleitung?';
+    $('ed-add-section').textContent = c ? '+ Testfall einfügen' : '+ Hinweis oder Abschnitt einfügen';
+    $('ed-steps').setAttribute('aria-label', c ? 'Prüfpunkte' : 'Schritte');
+    if (c) {
+      $('ed-pre').value = S.guide.test.pre || '';
+      $('ed-data').value = S.guide.test.data || '';
+    }
   }
 
   // ---- Laden ----
@@ -155,6 +183,7 @@ var Editor = (() => {
     document.title = `${guide.title} – Workflow Recorder`;
     $('ed-title').value = guide.title;
     $('ed-intro').value = guide.intro || '';
+    applyKind();
     renderMeta();
     setInterval(renderMeta, 30000);
     renderList();
@@ -176,6 +205,7 @@ var Editor = (() => {
     box.replaceChildren(...S.steps.map((s, i) => {
       const isSec = s.type === 'section';
       const flagged = !isSec && s.unredacted > 0 && !s.reviewed;
+      const open = isCheck() && !isSec && !s.expected;
       return el('button', {
         class: 'step-btn' + (isSec ? ' section' : ''),
         type: 'button',
@@ -186,7 +216,8 @@ var Editor = (() => {
       },
       el('span', { class: 'n', text: isSec ? '§' : U.pad2(nums[i]) }),
       el('span', { class: 't', text: s.text || (isSec ? 'Abschnitt' : 'Ohne Text') }),
-      flagged ? el('span', { class: 'flag', title: 'Ungeschwärzte Eingabefelder prüfen', text: 'prüfen' }) : null);
+      flagged ? el('span', { class: 'flag', title: 'Ungeschwärzte Eingabefelder prüfen', text: 'prüfen' }) : null,
+      open ? el('span', { class: 'flag open', title: 'Erwartetes Ergebnis fehlt', text: 'offen' }) : null);
     }));
     $('ed-empty').hidden = S.steps.length > 0;
     $('ed-card').hidden = S.steps.length === 0;
@@ -221,9 +252,18 @@ var Editor = (() => {
     const num = $('ed-num');
     num.textContent = isSec ? '§' : String(nums[S.sel]);
     num.classList.toggle('section', isSec);
-    $('ed-text-label').textContent = isSec ? 'Überschrift des Abschnitts' : 'Schritttext';
+    const c = isCheck();
+    $('ed-text-label').textContent = isSec ? (c ? 'Name des Testfalls' : 'Überschrift des Abschnitts') : (c ? 'Aktion' : 'Schritttext');
     $('ed-text').value = s.text || '';
-    $('ed-note-label').textContent = isSec ? 'Text des Abschnitts (optional)' : 'Hinweis zu diesem Schritt (optional)';
+    $('ed-exp-wrap').hidden = !c || isSec;
+    if (c && !isSec) {
+      $('ed-expected').value = s.expected || '';
+      renderSuggest();
+    }
+    $('ed-delete').lastChild.textContent = isSec ? (c ? 'Testfall löschen' : 'Abschnitt löschen') : (c ? 'Prüfpunkt löschen' : 'Schritt löschen');
+    $('ed-note-label').textContent = isSec
+      ? (c ? 'Beschreibung des Testfalls (optional)' : 'Text des Abschnitts (optional)')
+      : 'Hinweis zu diesem Schritt (optional)';
     $('ed-note').value = s.note || '';
     $('ed-toolbar').querySelectorAll('[data-tool]').forEach((b) => { b.hidden = isSec; });
     $('ed-undo').hidden = isSec;
@@ -251,6 +291,78 @@ var Editor = (() => {
       $('ed-img').src = S.imgUrl;
       $('ed-img').alt = `Screenshot zu Schritt ${nums[S.sel]}`;
       drawOverlay();
+    }
+  }
+
+  function renderSuggest() {
+    const s = current();
+    const show = !!(s && s.suggest && !s.expected);
+    $('ed-suggest').hidden = !show;
+    if (show) $('ed-suggest-btn').textContent = s.suggest;
+  }
+
+  function setExpected(value) {
+    const s = current();
+    if (!s) return;
+    s.expected = value.slice(0, MAX_EXPECTED);
+    renderSuggest();
+    const btn = $('ed-steps').querySelector(`[data-idx="${S.sel}"]`);
+    const has = btn && btn.querySelector('.flag.open');
+    if (!!has === !!s.expected) renderList();
+    saveLater('step-' + s.id, () => saveStep(s));
+  }
+
+  // ---- Klickweg als Checkliste kopieren ----
+
+  function changeSteps() {
+    return S.steps.filter((s) => s.type !== 'section' && s.suggest);
+  }
+
+  function openConvert() {
+    const total = stepCount();
+    const changes = changeSteps().length;
+    $('cv-sub').textContent = `aus „${S.guide.title || 'Ohne Titel'}“`;
+    $('cv-name').value = `Test: ${S.guide.title || 'Ohne Titel'}`.slice(0, 200);
+    $('cv-all').textContent = `Alle ${U.stepsLabel(total)}`;
+    $('cv-changes-label').textContent = changes
+      ? `Nur Schritte mit Statuswechsel oder Dialog (${changes} von ${total})`
+      : 'Nur Schritte mit Statuswechsel oder Dialog (in dieser Aufnahme nicht erkannt)';
+    $('cv-changes').disabled = !changes;
+    document.querySelector('input[name="cv-which"][value="all"]').checked = true;
+    $('cv-suggest').checked = true;
+    $('convert').showModal();
+  }
+
+  async function convert() {
+    await flushSaves();
+    const onlyChanges = $('cv-changes').checked;
+    const useSuggest = $('cv-suggest').checked;
+    let picked = S.steps.filter((s) => s.type === 'section' || !onlyChanges || s.suggest);
+    // Abschnitte ohne Prüfpunkte danach weglassen.
+    picked = picked.filter((s, i) => s.type !== 'section' || (picked[i + 1] && picked[i + 1].type !== 'section'));
+    if (!picked.some((s) => s.type !== 'section')) { U.toast('Keine Schritte zum Übernehmen.', { error: true }); return; }
+    $('cv-go').disabled = true;
+    let id = null;
+    try {
+      const title = $('cv-name').value.replace(/\s+/g, ' ').trim().slice(0, 200) || 'Neue Checkliste';
+      const g = await DB.addGuide({ title, intro: '', kind: 'checklist', test: { pre: '', data: '' }, logo: null });
+      id = g.id;
+      let order = 0;
+      for (const s of picked) {
+        const copy = { ...s, guideId: id, order: ++order };
+        delete copy.id;
+        if (s.type !== 'section') {
+          copy.expected = s.expected || (useSuggest && s.suggest ? s.suggest : '');
+          copy.annotations = (s.annotations || []).map((a) => ({ ...a }));
+          copy.redactions = (s.redactions || []).map((q) => ({ ...q }));
+        }
+        await DB.addStep(copy);
+      }
+      location.href = `editor.html?guide=${id}`;
+    } catch (e) {
+      if (id) await DB.deleteGuide(id).catch(() => {});
+      U.toast('Die Checkliste konnte nicht erstellt werden: ' + (e && e.message ? e.message : e), { error: true });
+      $('cv-go').disabled = false;
     }
   }
 
@@ -780,7 +892,9 @@ var Editor = (() => {
   async function deleteCurrent() {
     const s = current();
     if (!s) return;
-    const label = s.type === 'section' ? 'diesen Abschnitt' : 'diesen Schritt';
+    const label = s.type === 'section'
+      ? (isCheck() ? 'diesen Testfall' : 'diesen Abschnitt')
+      : (isCheck() ? 'diesen Prüfpunkt' : 'diesen Schritt');
     if (!confirm(`Möchtest du ${label} löschen?`)) return;
     await DB.deleteStep(s.id);
     S.undo.delete(s.id);
@@ -793,7 +907,7 @@ var Editor = (() => {
 
   async function addSection() {
     const at = S.steps.length ? S.sel + 1 : 0;
-    const rec = await DB.addStep({ guideId: S.guide.id, type: 'section', text: 'Neuer Abschnitt', note: '', order: at + 0.5 });
+    const rec = await DB.addStep({ guideId: S.guide.id, type: 'section', text: isCheck() ? 'Neuer Testfall' : 'Neuer Abschnitt', note: '', order: at + 0.5 });
     S.steps.splice(at, 0, rec);
     await renumberAndSave();
     renderList();
@@ -850,6 +964,26 @@ var Editor = (() => {
       S.guide.intro = e.target.value.slice(0, 5000);
       saveLater('guide', saveGuide);
     });
+    $('ed-pre').addEventListener('input', (e) => {
+      S.guide.test.pre = e.target.value.slice(0, 2000);
+      saveLater('guide', saveGuide);
+    });
+    $('ed-data').addEventListener('input', (e) => {
+      S.guide.test.data = e.target.value.slice(0, 2000);
+      saveLater('guide', saveGuide);
+    });
+    $('ed-expected').addEventListener('input', (e) => setExpected(e.target.value));
+    $('ed-suggest-btn').addEventListener('click', () => {
+      const s = current();
+      if (!s || !s.suggest) return;
+      $('ed-expected').value = s.suggest;
+      setExpected(s.suggest);
+    });
+    $('ed-to-check').addEventListener('click', openConvert);
+    $('cv-go').addEventListener('click', convert);
+    $('cv-close').addEventListener('click', () => $('convert').close());
+    $('cv-cancel').addEventListener('click', () => $('convert').close());
+    $('convert').addEventListener('click', (e) => { if (e.target === $('convert')) $('convert').close(); });
     $('ed-text').addEventListener('input', (e) => {
       const s = current();
       if (!s) return;
@@ -933,7 +1067,7 @@ var Editor = (() => {
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && S.tool && !$('export').open) setTool(null);
+      if (e.key === 'Escape' && S.tool && !$('export').open && !$('convert').open) setTool(null);
       const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName);
       if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && selected() && ANNO_TOOLS.has(S.tool)) {
         e.preventDefault();

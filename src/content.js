@@ -47,6 +47,12 @@
       sendResponse(r);
       return false;
     }
+    if (msg.type === 'observe') {
+      let r = null;
+      try { r = state.recording ? observe(msg.seq) : null; } catch (_) { r = null; }
+      sendResponse(r);
+      return false;
+    }
     applyState(msg);
     return false;
   });
@@ -376,7 +382,13 @@
       rects.push(...parts);
       if (rects.length > 400) break;
     }
-    return { rects: rects.slice(0, 400), unredacted: countUnredacted(covered) };
+    return {
+      rects: rects.slice(0, 400),
+      unredacted: countUnredacted(covered),
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      dpr: window.devicePixelRatio || 1
+    };
   }
 
   /** Zählt sichtbare, ausgefüllte Eingabefelder, die nicht geschwärzt sind. Werte werden nicht übertragen. */
@@ -395,6 +407,51 @@
     return n;
   }
 
+  // ---------- Vorschlag für das erwartete Ergebnis ----------
+  // Nur Beschriftungen aus Odoo (Status der Statusleiste, Titel eines Dialogs), nie Datensatznamen.
+  // Der Hintergrund fragt kurz nach dem Klick nach, was sich verändert hat.
+
+  const MAX_STATE = 40;
+  const before = new Map(); // seq -> { before, after } Zustand beim Klick und vor dem nächsten Klick
+  let seq = 0;
+
+  function short(t) {
+    t = cleanLabel(t);
+    return t.length > MAX_STATE ? t.slice(0, MAX_STATE - 1).trimEnd() + '…' : t;
+  }
+
+  function pageState() {
+    const st = document.querySelector('.o_statusbar_status .o_arrow_button_current, .o_statusbar_status [aria-checked="true"]');
+    const titles = Array.from(document.querySelectorAll('.modal.show .modal-title, .o_dialog .modal-title'))
+      .filter((n) => isVisibleRect(n.getBoundingClientRect()));
+    const dialog = titles.length ? titles[titles.length - 1] : null;
+    // Titel in privaten Bereichen (z. B. Datensatzname in der Navigationsleiste) nie übernehmen.
+    const safe = (n) => n && !PRIVATE_AREAS.some(([sel]) => n.closest(sel));
+    return {
+      status: safe(st) ? short(visibleText(st)) : '',
+      dialog: safe(dialog) ? short(visibleText(dialog)) : ''
+    };
+  }
+
+  function remember() {
+    const now = pageState();
+    // Der Zustand vor diesem Klick ist der Zustand nach dem vorherigen: so beschreibt ein Vorschlag
+    // nur, was sein eigener Klick bewirkt hat, auch wenn schnell weitergeklickt wird.
+    const prev = before.get(seq);
+    if (prev && !prev.after) prev.after = now;
+    seq = (seq + 1) % 1e9;
+    before.set(seq, { before: now, after: null });
+    if (before.size > 8) before.delete(before.keys().next().value);
+    return seq;
+  }
+
+  function observe(n) {
+    const e = before.get(n);
+    if (!e) return null;
+    before.delete(n);
+    return { before: e.before, after: e.after || pageState() };
+  }
+
   // ---------- Schritt aufnehmen ----------
 
   async function record(info, x, y) {
@@ -402,6 +459,7 @@
     try {
       await send({
         type: 'step',
+        seq: remember(),
         step: {
           kind: info.kind,
           text: info.text,

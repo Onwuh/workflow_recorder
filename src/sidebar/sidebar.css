@@ -52,3 +52,20 @@ body.sb { background: var(--bg); min-height: 100vh; display: flex; flex-directio
 .sb-insert-here:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
 
 .sb-opts { margin-top: 14px; }
+
+/* Checkliste: erwartetes Ergebnis */
+.sb-exp-wrap { display: flex; flex-direction: column; gap: 4px; }
+.sb-exp-label { font-size: 12px; color: var(--muted); }
+.sb-exp {
+  width: 100%; min-height: 36px; border: 1px solid var(--line-input); border-radius: 6px; padding: 6px 8px;
+  font-size: 13px; background: var(--surface); resize: vertical; line-height: 1.4;
+}
+.sb-exp:placeholder-shown { border-style: dashed; }
+.sb-exp:focus { border-color: var(--accent); outline: none; }
+.sb-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sb-chip {
+  min-height: 28px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg);
+  font-size: 12px; color: var(--fg); text-align: left;
+}
+.sb-chip:hover { border-color: var(--accent); color: var(--accent); }
+.sb-num.check { background: var(--ok); }

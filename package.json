@@ -1,7 +1,7 @@
 {
   "name": "workflow-recorder",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Browser-Erweiterung: Klick-Abläufe aufzeichnen und als Anleitung exportieren",
   "scripts": {
     "test": "node --test tests/*.test.js",

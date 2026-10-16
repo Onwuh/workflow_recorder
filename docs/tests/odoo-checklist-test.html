@@ -1,0 +1,162 @@
+<title>Odoo Checklisten-Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column — Anleitung, Testinhalt, Auswertung */
+:root {
+  --bg: #F6F6F3; --surface: #FFFFFF; --fg: #1B1D1F; --muted: #5F6267;
+  --line: #DCDCD6; --accent: #2B59C3; --accent-soft: #EEF2FB;
+  --ok: #1D7A46; --ok-soft: #E6F4EC; --bad: #A12A21; --bad-soft: #FBEAE8;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #16181A; --surface: #1F2225; --fg: #ECEDEE; --muted: #A3A7AC;
+  --line: #34383C; --accent: #7EA2F2; --accent-soft: #22304F;
+  --ok: #6FD39B; --ok-soft: #173525; --bad: #F2948C; --bad-soft: #3D1F1C; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #16181A; --surface: #1F2225; --fg: #ECEDEE; --muted: #A3A7AC;
+  --line: #34383C; --accent: #7EA2F2; --accent-soft: #22304F;
+  --ok: #6FD39B; --ok-soft: #173525; --bad: #F2948C; --bad-soft: #3D1F1C; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 64px; display: flex; flex-direction: column; gap: 28px; }
+h1 { margin: 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
+h2 { margin: 0; font-size: 17px; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+.label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+ol.howto { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+button { font-family: inherit; font-size: 15px; font-weight: 600; height: 44px; padding: 0 20px; border: 0; border-radius: 9px; background: var(--accent); color: var(--surface); cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+#status { font-size: 14px; color: var(--muted); min-height: 1.5em; }
+#status.ok { color: var(--ok); } #status.bad { color: var(--bad); }
+#sample { border: 1px dashed var(--line); border-radius: 8px; padding: 18px; min-width: 0; overflow-wrap: anywhere; }
+#sample img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
+.meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.results { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.res { border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.res.ok { background: var(--ok-soft); } .res.bad { background: var(--bad-soft); }
+.res strong { font-size: 14px; } .res.ok strong { color: var(--ok); } .res.bad strong { color: var(--bad); }
+.res span { font-size: 14px; }
+code { font-family: var(--mono); font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Odoo Checklisten-Test</h1>
+    <p class="lede">Prüft, ob eine exportierte Testcheckliste in Odoo Wissen als abhakbare Checkliste ankommt und die kleinen Screenshots passen. Der Inhalt hat denselben Aufbau wie der Export der Erweiterung.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-how">
+    <h2 id="h-how">Ablauf</h2>
+    <ol class="howto">
+      <li>Unten auf „Testinhalt kopieren“ klicken.</li>
+      <li>In Odoo Wissen einen neuen, leeren Artikel anlegen.</li>
+      <li>In den Artikel klicken und mit ⌘ V bzw. Strg + V einfügen.</li>
+      <li>Die Punkte unten prüfen, dann den Artikel neu laden und noch einmal prüfen.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="h-sample">
+    <div class="bar">
+      <h2 id="h-sample">Testinhalt</h2>
+      <button id="copy" type="button">Testinhalt kopieren</button>
+    </div>
+    <p id="status" role="status"></p>
+    <div id="sample"></div>
+    <p class="meta" id="sizes"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-check">
+    <h2 id="h-check">Ergebnis prüfen</h2>
+    <div class="results">
+      <div class="res ok"><strong>1. Haken</strong><span>Vor jedem Prüfpunkt steht ein Kästchen. Ein Klick darauf setzt den Haken, der Punkt wird durchgestrichen.</span></div>
+      <div class="res ok"><strong>2. Ein Haken pro Prüfpunkt</strong><span>„Erwartet“, Bild und „Bemerkung“ stehen im selben Punkt, nicht als eigene Kästchen.</span></div>
+      <div class="res ok"><strong>3. Kleine Bilder</strong><span>Die Bilder sind etwa halb so breit wie die Artikelspalte und rechts nicht abgeschnitten.</span></div>
+      <div class="res ok"><strong>4. Tabelle</strong><span>In die leeren Zellen „Getestet von“ und „Datum“ lässt sich schreiben.</span></div>
+      <div class="res ok"><strong>5. Nach dem Neuladen</strong><span>Gesetzte Haken und Eingaben sind noch da.</span></div>
+    </div>
+    <p style="margin:0;color:var(--muted)">Fehlen die Kästchen (stattdessen Aufzählungspunkte), entfernt Odoo beim Einfügen die Klasse <code>o_checklist</code>. Dann bitte melden, welche Odoo-Version verwendet wird.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  function shot(w, h, title, cx, cy) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var g = c.getContext('2d'); var s = w / 1600;
+    g.fillStyle = '#FAFAF8'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#2E3034'; g.fillRect(0, 0, w, 64 * s);
+    g.fillStyle = '#4A6FD0'; g.fillRect(40 * s, 100 * s, 150 * s, 52 * s);
+    g.fillStyle = '#1B1D1F'; g.font = (34 * s) + 'px sans-serif';
+    g.fillText(title, 40 * s, 230 * s);
+    for (var r = 0; r < 6; r++) {
+      var y = (290 + r * 90) * s;
+      g.fillStyle = '#B8BAB4'; g.fillRect(40 * s, y, 160 * s, 12 * s);
+      g.fillStyle = '#CFD0CB'; g.fillRect(40 * s, y + 46 * s, 620 * s, 2 * s);
+    }
+    g.strokeStyle = '#C8372D'; g.lineWidth = 6 * s; g.fillStyle = 'rgba(200,55,45,0.12)';
+    g.beginPath(); g.arc(cx * s, cy * s, 48 * s, 0, Math.PI * 2); g.fill(); g.stroke();
+    // Wie der Export: höchstens 480 px breit, WebP (Fallback JPEG, falls der Browser kein WebP kodiert).
+    var webp = c.toDataURL('image/webp', 0.85);
+    return webp.indexOf('data:image/webp') === 0 ? webp : c.toDataURL('image/jpeg', 0.85);
+  }
+
+  var img1 = shot(480, 300, 'Testbild 1', 115, 126);
+  var img2 = shot(480, 300, 'Testbild 2', 270, 126);
+  var howto = 'Führe die Punkte der Reihe nach aus. Stimmt das Ergebnis, setze den Haken. Stimmt es nicht, lass den Haken weg und beschreibe unter „Bemerkung“, was passiert ist.';
+
+  var html =
+    '<h2>Test: Angebot bestätigen</h2>' +
+    '<p><strong>So testest du:</strong> ' + howto + '</p>' +
+    '<table class="table table-bordered"><tbody>' +
+      '<tr><td><strong>Getestet von</strong></td><td><p><br></p></td></tr>' +
+      '<tr><td><strong>Datum</strong></td><td><p><br></p></td></tr>' +
+      '<tr><td><strong>Ziel</strong></td><td><p>Ein Angebot kann bestätigt werden.</p></td></tr>' +
+    '</tbody></table>' +
+    '<h3>Testfall 1: Angebot bestätigen</h3>' +
+    '<ul class="o_checklist">' +
+      '<li><strong>1. Klicke auf „Neu“</strong><br>Erwartet: Ein leeres Angebotsformular öffnet sich.<br><img class="img-fluid" src="' + img1 + '" alt="Prüfpunkt 1"><br>Bemerkung: </li>' +
+      '<li><strong>2. Klicke auf „Bestätigen“</strong><br>Erwartet: Status wechselt auf „Verkaufsauftrag“.<br><img class="img-fluid" src="' + img2 + '" alt="Prüfpunkt 2"><br>Bemerkung: </li>' +
+      '<li><strong>3. Prüfpunkt</strong><br>Erwartet: Rechnung im Status „Entwurf“.<br>Bemerkung: </li>' +
+    '</ul>' +
+    '<h3>Abnahme</h3><ul class="o_checklist"><li>Alle Punkte erfüllt, der Ablauf ist freigegeben.</li></ul><p>Name, Datum: </p>';
+
+  var text = 'Test: Angebot bestätigen\n\n[ ] 1. Klicke auf „Neu“\n[ ] 2. Klicke auf „Bestätigen“\n[ ] 3. Prüfpunkt\n';
+
+  var sample = document.getElementById('sample');
+  sample.innerHTML = html;
+
+  function kb(d) { return Math.round((d.length - d.indexOf(',') - 1) * 3 / 4 / 1024); }
+  document.getElementById('sizes').textContent =
+    'Bilder: je ca. ' + kb(img1) + ' KB, 480 px breit · HTML gesamt: ca. ' + Math.round(html.length / 1024) + ' KB';
+
+  var status = document.getElementById('status');
+  function say(msg, cls) { status.textContent = msg; status.className = cls || ''; }
+
+  function selectionCopy() {
+    var range = document.createRange(); range.selectNodeContents(sample);
+    var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (ok) { sel.removeAllRanges(); say('Kopiert (über Auswahl). Jetzt in Odoo einfügen.', 'ok'); }
+    else { say('Automatisches Kopieren wurde blockiert. Der Inhalt ist markiert, bitte jetzt ⌘ C drücken.', 'bad'); }
+  }
+
+  document.getElementById('copy').addEventListener('click', function () {
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        var item = new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        });
+        navigator.clipboard.write([item]).then(function () {
+          say('Kopiert. Jetzt in Odoo einfügen.', 'ok');
+        }, selectionCopy);
+      } else { selectionCopy(); }
+    } catch (e) { selectionCopy(); }
+  });
+})();
+</script>
